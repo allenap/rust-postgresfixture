@@ -2,6 +2,8 @@
 
 extern crate semver;
 
+use std::env;
+use std::ffi;
 use std::io;
 use std::process::Command;
 use std::path::{Path,PathBuf};
@@ -27,7 +29,6 @@ impl From<SemVerError> for VersionError {
     }
 }
 
-
 fn get_version<P: AsRef<Path>>(pg_ctl: P) -> Result<Version, VersionError> {
     // Execute pg_ctl and extract version.
     let version_output = Command::new(pg_ctl.as_ref()).arg("--version").output()?;
@@ -40,8 +41,12 @@ fn get_version<P: AsRef<Path>>(pg_ctl: P) -> Result<Version, VersionError> {
 
 
 struct PostgreSQL {
-    /// Path to the `pg_ctl` executable.
-    pg_ctl: PathBuf,
+    /// Path to the directory containing the `pg_ctl` executable and other
+    /// PostgreSQL binaries.
+    ///
+    /// Can be omitted (i.e. `None`) to search `PATH` only.
+    bindir: Option<PathBuf>,
+
     /// Version number of PostgreSQL.
     ///
     /// https://www.postgresql.org/support/versioning/ shows that
@@ -50,30 +55,53 @@ struct PostgreSQL {
 }
 
 impl PostgreSQL {
-    pub fn new_with_version<P: AsRef<Path>>(pg_ctl: P, version: Version) -> Self {
-        Self{pg_ctl: pg_ctl.as_ref().to_path_buf(), version: version}
-    }
 
-    pub fn new<P: AsRef<Path>>(pg_ctl: P) -> Result<Self, VersionError> {
+    pub fn default() -> Result<Self, VersionError> {
         Ok(Self{
-            pg_ctl: pg_ctl.as_ref().to_path_buf(),
-            version: get_version(pg_ctl)?,
+            bindir: None,
+            version: get_version("pg_ctl")?,
         })
     }
 
-    pub fn default() -> Result<Self, VersionError> {
-        Self::new("pg_ctl")
+    pub fn new<P: AsRef<Path>>(bindir: P) -> Result<Self, VersionError> {
+        Ok(Self{
+            bindir: Some(bindir.as_ref().to_path_buf()),
+            version: get_version(bindir.as_ref().join("pg_ctl"))?,
+        })
     }
 
     pub fn ctl(&self) -> Command {
-        let mut command = Command::new(&self.pg_ctl);
-        command.env("PATH", path_with_pg_bin(&self.pg_ctl));
+        let mut command;
+        match self.bindir {
+            Some(ref bindir) => {
+                command = Command::new(bindir.join("pg_ctl"));
+                // For now, panic if we can't manipulate PATH.
+                // TODO: Print warning if this fails.
+                if let Some(path) = prepend_path(&bindir).unwrap() {
+                    command.env("PATH", path);
+                }
+            },
+            None => {
+                command = Command::new("pg_ctl");
+            }
+        }
         command
     }
 }
 
-fn path_with_pg_bin(pg_ctl: &Path) -> &'static str {
-    "fred"
+
+fn prepend_path(bindir: &Path)
+        -> Result<Option<ffi::OsString>, env::JoinPathsError> {
+    Ok(match env::var_os("PATH") {
+        None => None,
+        Some(path) => {
+            let mut paths = vec!(bindir.to_path_buf());
+            paths.extend(
+                env::split_paths(&path)
+                    .filter(|path| path != bindir));
+            Some(env::join_paths(paths)?)
+        },
+    })
 }
 
 
@@ -95,21 +123,23 @@ impl Cluster {
         }
     }
 
+    fn ctl(&self) -> Command {
+        let mut command = self.postgres.ctl();
+        command.env("PGDATA", &self.datadir);
+        command.env("PGHOST", &self.datadir);
+        command
+    }
+
     pub fn exists(&self) -> bool {
-        self.datadir.is_dir() && self.datadir.join("PG_VERSION").is_file()
+        self.datadir.is_dir() &&
+            self.datadir.join("PG_VERSION").is_file()
     }
 
-    pub fn is_running(&self) -> bool {
-        false
+    pub fn is_running(&self) -> io::Result<bool> {
+        self.ctl().arg("status").output()
+            .map(|output| output.status.success())
+        // TODO: Success depends on version.
     }
-
-    // fn execute(&self) -> Result<()> {
-    //     // env = options.pop("env", environ).copy()
-    //     // env["PATH"] = path_with_pg_bin(env.get("PATH", ""), self.version)
-    //     // env["PGDATA"] = env["PGHOST"] = self.datadir
-    //     // check_call(command, env=env, **options)
-    //
-    // }
 
 }
 
@@ -121,13 +151,18 @@ mod tests {
     use super::Cluster;
     use super::PostgreSQL;
 
-    use semver::Version;
+    use std::env;
     use std::fs::File;
-    use std::path::Path;
+    use std::path::{Path,PathBuf};
+
+    fn find_bindir() -> PathBuf {
+        env::split_paths(&env::var_os("PATH").unwrap())
+            .find(|path| path.join("pg_ctl").exists()).unwrap()
+    }
 
     #[test]
     fn postgres_new_discovers_version() {
-        let pg = PostgreSQL::new("pg_ctl").unwrap();
+        let pg = PostgreSQL::new(find_bindir()).unwrap();
         assert!(pg.version.major >= 9);
     }
 
@@ -139,19 +174,15 @@ mod tests {
 
     #[test]
     fn create_new_cluster() {
-        let pg = PostgreSQL::new_with_version(
-            "pg_ctl", Version::parse("1.2.3").unwrap());
+        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
         let cluster = Cluster::new("some/path", pg);
         assert_eq!(Path::new("some/path"), cluster.datadir);
-        // assert_eq!((1, 2, 3), (
-        //     cluster.version.major, cluster.version.minor,
-        //     cluster.version.patch));
+        assert_eq!(false, cluster.is_running().unwrap());
     }
 
     #[test]
     fn cluster_does_not_exist() {
-        let pg = PostgreSQL::new_with_version(
-            "pg_ctl", Version::parse("1.2.3").unwrap());
+        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
         let cluster = Cluster::new("some/path", pg);
         assert!(!cluster.exists());
     }
@@ -161,8 +192,7 @@ mod tests {
         let data_dir = tempdir::TempDir::new("data").unwrap();
         let version_file = data_dir.path().join("PG_VERSION");
         File::create(&version_file).unwrap();
-        let pg = PostgreSQL::new_with_version(
-            "pg_ctl", Version::parse("1.2.3").unwrap());
+        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
         let cluster = Cluster::new(&data_dir, pg);
         assert!(cluster.exists());
     }
