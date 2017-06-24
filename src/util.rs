@@ -20,3 +20,30 @@ pub fn prepend_path(bindir: &Path)
         },
     })
 }
+
+
+#[cfg(test)]
+mod tests {
+    extern crate tempdir;
+
+    use super::prepend_path;
+
+    use std::env;
+
+    #[test]
+    fn test_prepend_path() {
+        let path = env::var_os("PATH").unwrap();
+        let tmpdir = tempdir::TempDir::new("bin").unwrap();
+        // let bindir = PathBuf::from("foo/bar");
+        let expected = {
+            let mut tmp = vec!(tmpdir.path().to_path_buf());
+            tmp.extend(env::split_paths(&path));
+            env::join_paths(tmp).unwrap()
+        };
+        let observed = {
+            prepend_path(tmpdir.path()).unwrap().unwrap()
+        };
+        assert_eq!(expected, observed);
+    }
+
+}
