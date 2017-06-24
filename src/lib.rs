@@ -2,12 +2,12 @@
 
 extern crate semver;
 
-use std::env;
-use std::ffi;
 use std::io;
 use std::process::Command;
 use std::path::{Path,PathBuf};
 use semver::{Version,SemVerError};
+
+mod util;
 
 
 #[derive(Debug)]
@@ -77,7 +77,7 @@ impl PostgreSQL {
                 command = Command::new(bindir.join("pg_ctl"));
                 // For now, panic if we can't manipulate PATH.
                 // TODO: Print warning if this fails.
-                if let Some(path) = prepend_path(&bindir).unwrap() {
+                if let Some(path) = util::prepend_path(&bindir).unwrap() {
                     command.env("PATH", path);
                 }
             },
@@ -87,21 +87,6 @@ impl PostgreSQL {
         }
         command
     }
-}
-
-
-fn prepend_path(bindir: &Path)
-        -> Result<Option<ffi::OsString>, env::JoinPathsError> {
-    Ok(match env::var_os("PATH") {
-        None => None,
-        Some(path) => {
-            let mut paths = vec!(bindir.to_path_buf());
-            paths.extend(
-                env::split_paths(&path)
-                    .filter(|path| path != bindir));
-            Some(env::join_paths(paths)?)
-        },
-    })
 }
 
 
