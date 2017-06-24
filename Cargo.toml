@@ -1,0 +1,11 @@
+[package]
+name = "postgresfixture"
+version = "0.1.0"
+authors = ["Gavin Panella <gavinpanella@gmail.com>"]
+
+[dependencies]
+postgres = "^0.14.2"
+semver = "^0.7.0"
+
+[dev-dependencies]
+tempdir = "^0.3"
