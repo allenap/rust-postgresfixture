@@ -2,6 +2,7 @@
 
 extern crate semver;
 
+use std::env;
 use std::io;
 use std::process::Command;
 use std::path::{Path,PathBuf};
@@ -77,9 +78,9 @@ impl PostgreSQL {
                 command = Command::new(bindir.join("pg_ctl"));
                 // For now, panic if we can't manipulate PATH.
                 // TODO: Print warning if this fails.
-                if let Some(path) = util::prepend_path(&bindir).unwrap() {
-                    command.env("PATH", path);
-                }
+                command.env(
+                    "PATH", util::prepend_to_path(
+                        &bindir, env::var_os("PATH")).unwrap());
             },
             None => {
                 command = Command::new("pg_ctl");
