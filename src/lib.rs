@@ -204,6 +204,14 @@ impl Cluster {
         }
     }
 
+    pub fn pidfile(&self) -> PathBuf {
+        self.datadir.join("postmaster.pid")
+    }
+
+    pub fn logfile(&self) -> PathBuf {
+        self.datadir.join("backend.log")
+    }
+
 }
 
 
@@ -258,5 +266,21 @@ mod tests {
         let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
         let cluster = Cluster::new(&data_dir, pg);
         assert!(cluster.exists());
+    }
+
+    #[test]
+    fn cluster_has_pid_file() {
+        let data_dir = PathBuf::from("/some/where");
+        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
+        let cluster = Cluster::new(&data_dir, pg);
+        assert_eq!(PathBuf::from("/some/where/postmaster.pid"), cluster.pidfile());
+    }
+
+    #[test]
+    fn cluster_has_log_file() {
+        let data_dir = PathBuf::from("/some/where");
+        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
+        let cluster = Cluster::new(&data_dir, pg);
+        assert_eq!(PathBuf::from("/some/where/backend.log"), cluster.logfile());
     }
 }
