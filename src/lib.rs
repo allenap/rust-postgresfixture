@@ -4,7 +4,7 @@ extern crate semver;
 
 use std::env;
 use std::io;
-use std::process::Command;
+use std::process::{Command,Output};
 use std::path::{Path,PathBuf};
 use semver::{Version,SemVerError};
 
@@ -91,6 +91,20 @@ impl PostgreSQL {
 }
 
 
+#[derive(Debug)]
+enum ClusterError {
+    IoError(io::Error),
+    Unsupported(Version),
+    Other(Output),
+}
+
+impl From<io::Error> for ClusterError {
+    fn from(error: io::Error) -> ClusterError {
+        ClusterError::IoError(error)
+    }
+}
+
+
 struct Cluster {
     /// The data directory of the cluster.
     ///
@@ -121,10 +135,73 @@ impl Cluster {
             self.datadir.join("PG_VERSION").is_file()
     }
 
-    pub fn is_running(&self) -> io::Result<bool> {
-        self.ctl().arg("status").output()
-            .map(|output| output.status.success())
-        // TODO: Success depends on version.
+    pub fn is_running(&self) -> Result<bool, ClusterError> {
+        // TODO: Test this stuff. It's untested because I want the means to create and destroy
+        // clusters before writing the tests for this.
+        let output = self.ctl().arg("status").output()?;
+        let code = match output.status.code() {
+            // Killed by signal; return early.
+            None => return Err(ClusterError::Other(output)),
+            // Success; return early (the server is running).
+            Some(code) if code == 0 => return Ok(true),
+            // More work required to decode what this means.
+            Some(code) => code,
+        };
+        let version = &self.postgres.version;
+        // PostgreSQL has evolved to return different error codes in
+        // later versions, so here we check for specific codes to avoid
+        // masking errors from insufficient permissions or missing
+        // executables, for example.
+        let running = match version.major {
+            // PostgreSQL 9.x
+            9 => {
+                // PostgreSQL 9.4+
+                if version.minor >= 4 {
+                    match code {
+                        // 3 means that the data directory is present and
+                        // accessible but that the server is not running.
+                        3 => Some(false),
+                        // 4 means that the data directory is not present or is
+                        // not accessible. If it's missing, then the server is
+                        // not running. If it is present but not accessible
+                        // then crash because we can't know if the server is
+                        // running or not.
+                        4 if !self.exists() => Some(false),
+                        // For anything else we don't know.
+                        _ => None,
+                    }
+                }
+                // PostgreSQL 9.2+
+                else if version.minor >= 2 {
+                    match code {
+                        // 3 means that the data directory is present and
+                        // accessible but that the server is not running OR
+                        // that the data directory is not present.
+                        3 => Some(false),
+                        // For anything else we don't know.
+                        _ => None,
+                    }
+                }
+                // PostgreSQL 9.0+
+                else {
+                    match code {
+                        // 1 means that the server is not running OR the data
+                        // directory is not present OR that the data directory
+                        // is not accessible.
+                        1 => Some(false),
+                        // For anything else we don't know.
+                        _ => None,
+                    }
+                }
+            },
+            // All other versions.
+            _ => None,
+        };
+
+        match running {
+            Some(running) => Ok(running),
+            None => Err(ClusterError::Unsupported(version.clone())),
+        }
     }
 
 }
@@ -142,8 +219,8 @@ mod tests {
     use std::path::{Path,PathBuf};
 
     fn find_bindir() -> PathBuf {
-        env::split_paths(&env::var_os("PATH").unwrap())
-            .find(|path| path.join("pg_ctl").exists()).unwrap()
+        env::split_paths(&env::var_os("PATH").expect("PATH not set"))
+            .find(|path| path.join("pg_ctl").exists()).expect("pg_ctl not on PATH")
     }
 
     #[test]
@@ -160,7 +237,7 @@ mod tests {
 
     #[test]
     fn create_new_cluster() {
-        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
+        let pg = PostgreSQL{bindir: None, version: "9.5.2".parse().unwrap()};
         let cluster = Cluster::new("some/path", pg);
         assert_eq!(Path::new("some/path"), cluster.datadir);
         assert_eq!(false, cluster.is_running().unwrap());
