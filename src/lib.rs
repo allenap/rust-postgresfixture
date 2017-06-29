@@ -117,8 +117,10 @@ struct Cluster {
 impl Cluster {
 
     pub fn new<P: AsRef<Path>>(datadir: P, postgres: PostgreSQL) -> Self {
+        let datadir = datadir.as_ref();
         Cluster{
-            datadir: datadir.as_ref().to_path_buf(),
+            datadir: datadir.to_path_buf(),
+            lockfile: datadir.parent().unwrap_or(datadir).join(".cluster.lock").to_path_buf(),
             postgres: postgres,
         }
     }
@@ -135,6 +137,10 @@ impl Cluster {
             self.datadir.join("PG_VERSION").is_file()
     }
 
+    /// Check if this cluster is running.
+    ///
+    /// Tries to distinguish carefully between "definitely running", "definitely not running", and
+    /// "don't know". The latter results in `ClusterError`.
     pub fn is_running(&self) -> Result<bool, ClusterError> {
         // TODO: Test this stuff. It's untested because I want the means to create and destroy
         // clusters before writing the tests for this.
@@ -153,9 +159,30 @@ impl Cluster {
         // masking errors from insufficient permissions or missing
         // executables, for example.
         let running = match version.major {
+            // PostgreSQL 10.x
+            10 => {
+                // PostgreSQL 10
+                // https://www.postgresql.org/docs/10/static/app-pg-ctl.html
+                match code {
+                    // 3 means that the data directory is present and
+                    // accessible but that the server is not running.
+                    3 => Some(false),
+                    // 4 means that the data directory is not present or is
+                    // not accessible. If it's missing, then the server is
+                    // not running. If it is present but not accessible
+                    // then crash because we can't know if the server is
+                    // running or not.
+                    4 if !self.exists() => Some(false),
+                    // For anything else we don't know.
+                    _ => None,
+                }
+            },
             // PostgreSQL 9.x
             9 => {
                 // PostgreSQL 9.4+
+                // https://www.postgresql.org/docs/9.4/static/app-pg-ctl.html
+                // https://www.postgresql.org/docs/9.5/static/app-pg-ctl.html
+                // https://www.postgresql.org/docs/9.6/static/app-pg-ctl.html
                 if version.minor >= 4 {
                     match code {
                         // 3 means that the data directory is present and
@@ -172,6 +199,8 @@ impl Cluster {
                     }
                 }
                 // PostgreSQL 9.2+
+                // https://www.postgresql.org/docs/9.2/static/app-pg-ctl.html
+                // https://www.postgresql.org/docs/9.3/static/app-pg-ctl.html
                 else if version.minor >= 2 {
                     match code {
                         // 3 means that the data directory is present and
@@ -183,6 +212,8 @@ impl Cluster {
                     }
                 }
                 // PostgreSQL 9.0+
+                // https://www.postgresql.org/docs/9.0/static/app-pg-ctl.html
+                // https://www.postgresql.org/docs/9.1/static/app-pg-ctl.html
                 else {
                     match code {
                         // 1 means that the server is not running OR the data
@@ -204,10 +235,16 @@ impl Cluster {
         }
     }
 
+    /// Return the path to the PID file used in this cluster.
+    ///
+    /// The PID file does not necessarily exist.
     pub fn pidfile(&self) -> PathBuf {
         self.datadir.join("postmaster.pid")
     }
 
+    /// Return the path to the log file used in this cluster.
+    ///
+    /// The log file does not necessarily exist.
     pub fn logfile(&self) -> PathBuf {
         self.datadir.join("backend.log")
     }
