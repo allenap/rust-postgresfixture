@@ -53,27 +53,33 @@ pub struct PostgreSQL {
     /// Can be omitted (i.e. `None`) to search `PATH` only.
     bindir: Option<PathBuf>,
 
-    /// Version number of PostgreSQL.
-    ///
-    /// https://www.postgresql.org/support/versioning/ shows that
-    /// version numbers are essentially SemVer compatible... I think.
-    version: Version,
+    // version: Version,
+}
+
+impl Default for PostgreSQL {
+    fn default() -> Self {
+        Self{bindir: None}
+    }
 }
 
 impl PostgreSQL {
 
-    pub fn default() -> Result<Self, VersionError> {
-        Ok(Self{
-            bindir: None,
-            version: get_version("pg_ctl")?,
-        })
+    pub fn new<P: AsRef<Path>>(bindir: P) -> Self {
+        Self{bindir: Some(bindir.as_ref().to_path_buf())}
     }
 
-    pub fn new<P: AsRef<Path>>(bindir: P) -> Result<Self, VersionError> {
-        Ok(Self{
-            bindir: Some(bindir.as_ref().to_path_buf()),
-            version: get_version(bindir.as_ref().join("pg_ctl"))?,
-        })
+    /// Get the version number of PostgreSQL.
+    ///
+    /// https://www.postgresql.org/support/versioning/ shows that
+    /// version numbers are essentially SemVer compatible... I think.
+    pub fn version(&self) -> Result<Version, VersionError> {
+        // Execute pg_ctl and extract version.
+        let version_output = self.ctl().arg("--version").output()?;
+        let version_string = String::from_utf8_lossy(&version_output.stdout);
+        match version_string.split_whitespace().last() {
+            Some(version) => Ok(version.parse()?),
+            None => Err(VersionError::Missing),
+        }
     }
 
     pub fn ctl(&self) -> Command {
@@ -99,13 +105,20 @@ impl PostgreSQL {
 #[derive(Debug)]
 pub enum ClusterError {
     IoError(io::Error),
-    Unsupported(Version),
+    UnsupportedVersion(Version),
+    UnknownVersion(VersionError),
     Other(Output),
 }
 
 impl From<io::Error> for ClusterError {
     fn from(error: io::Error) -> ClusterError {
         ClusterError::IoError(error)
+    }
+}
+
+impl From<VersionError> for ClusterError {
+    fn from(error: VersionError) -> ClusterError {
+        ClusterError::UnknownVersion(error)
     }
 }
 
@@ -160,7 +173,7 @@ impl Cluster {
             // More work required to decode what this means.
             Some(code) => code,
         };
-        let version = &self.postgres.version;
+        let version = self.postgres.version()?;
         // PostgreSQL has evolved to return different error codes in
         // later versions, so here we check for specific codes to avoid
         // masking errors from insufficient permissions or missing
@@ -238,7 +251,7 @@ impl Cluster {
 
         match running {
             Some(running) => Ok(running),
-            None => Err(ClusterError::Unsupported(version.clone())),
+            None => Err(ClusterError::UnsupportedVersion(version)),
         }
     }
 
@@ -299,20 +312,23 @@ mod tests {
     }
 
     #[test]
-    fn postgres_new_discovers_version() {
-        let pg = PostgreSQL::new(find_bindir()).unwrap();
-        assert!(pg.version.major >= 9);
+    fn postgres_new() {
+        let bindir = find_bindir();
+        let pg = PostgreSQL::new(&bindir);
+        assert_eq!(Some(bindir), pg.bindir);
     }
 
     #[test]
-    fn postgres_default_discovers_version() {
-        let pg = PostgreSQL::default().unwrap();
-        assert!(pg.version.major >= 9);
+    fn postgres_default() {
+        let pg = PostgreSQL::default();
+        assert_eq!(None, pg.bindir);
+        let pg: PostgreSQL = Default::default();  // Via trait.
+        assert_eq!(None, pg.bindir);
     }
 
     #[test]
     fn cluster_new() {
-        let pg = PostgreSQL{bindir: None, version: "9.5.2".parse().unwrap()};
+        let pg = PostgreSQL{bindir: None};
         let cluster = Cluster::new("some/path", pg);
         assert_eq!(Path::new("some/path"), cluster.datadir);
         assert_eq!(false, cluster.is_running().unwrap());
@@ -320,7 +336,7 @@ mod tests {
 
     #[test]
     fn cluster_does_not_exist() {
-        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
+        let pg = PostgreSQL{bindir: None};
         let cluster = Cluster::new("some/path", pg);
         assert!(!cluster.exists());
     }
@@ -330,7 +346,7 @@ mod tests {
         let data_dir = tempdir::TempDir::new("data").unwrap();
         let version_file = data_dir.path().join("PG_VERSION");
         File::create(&version_file).unwrap();
-        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
+        let pg = PostgreSQL{bindir: None};
         let cluster = Cluster::new(&data_dir, pg);
         assert!(cluster.exists());
     }
@@ -338,7 +354,7 @@ mod tests {
     #[test]
     fn cluster_has_pid_file() {
         let data_dir = PathBuf::from("/some/where");
-        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
+        let pg = PostgreSQL{bindir: None};
         let cluster = Cluster::new(&data_dir, pg);
         assert_eq!(PathBuf::from("/some/where/postmaster.pid"), cluster.pidfile());
     }
@@ -346,7 +362,7 @@ mod tests {
     #[test]
     fn cluster_has_log_file() {
         let data_dir = PathBuf::from("/some/where");
-        let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
+        let pg = PostgreSQL{bindir: None};
         let cluster = Cluster::new(&data_dir, pg);
         assert_eq!(PathBuf::from("/some/where/backend.log"), cluster.logfile());
     }
@@ -354,7 +370,7 @@ mod tests {
     #[test]
     fn cluster_create_creates_cluster() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let pg = PostgreSQL::default().unwrap();
+        let pg = PostgreSQL::default();
         let cluster = Cluster::new(&data_dir, pg);
         assert!(!cluster.exists());
         assert!(cluster.create().unwrap());
@@ -364,7 +380,7 @@ mod tests {
     #[test]
     fn cluster_create_does_nothing_when_it_already_exists() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let pg = PostgreSQL::default().unwrap();
+        let pg = PostgreSQL::default();
         let cluster = Cluster::new(&data_dir, pg);
         assert!(!cluster.exists());
         assert!(cluster.create().unwrap());
