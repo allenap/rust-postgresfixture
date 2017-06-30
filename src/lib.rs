@@ -353,6 +353,21 @@ impl Cluster {
         Ok(true)
     }
 
+    // Destroy the cluster if it exists, after stopping it.
+    pub fn destroy(&self) -> Result<bool, ClusterError> {
+        self.lock()?.do_exclusive(|| self._destroy())?
+    }
+
+    fn _destroy(&self) -> Result<bool, ClusterError> {
+        if self._stop()? || self.datadir.is_dir() {
+            fs::remove_dir_all(&self.datadir)?;
+            Ok(true)
+        }
+        else {
+            Ok(false)
+        }
+    }
+
 }
 
 
@@ -460,6 +475,18 @@ mod tests {
         assert!(cluster.running().unwrap());
         cluster.stop().unwrap();
         assert!(!cluster.running().unwrap());
+    }
+
+    #[test]
+    fn cluster_destroy_stops_and_removes_cluster() {
+        let data_dir = tempdir::TempDir::new("data").unwrap();
+        let pg = PostgreSQL::default();
+        let cluster = Cluster::new(&data_dir, pg);
+        cluster.create().unwrap();
+        cluster.start().unwrap();
+        assert!(cluster.exists());
+        cluster.destroy().unwrap();
+        assert!(!cluster.exists());
     }
 
 }
