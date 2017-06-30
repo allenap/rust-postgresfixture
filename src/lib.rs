@@ -161,7 +161,7 @@ impl Cluster {
     ///
     /// Tries to distinguish carefully between "definitely running", "definitely not running", and
     /// "don't know". The latter results in `ClusterError`.
-    pub fn is_running(&self) -> Result<bool, ClusterError> {
+    pub fn running(&self) -> Result<bool, ClusterError> {
         // TODO: Test this stuff. It's untested because I want the means to create and destroy
         // clusters before writing the tests for this.
         let output = self.ctl().arg("status").output()?;
@@ -330,7 +330,7 @@ mod tests {
         let pg = PostgreSQL{bindir: None};
         let cluster = Cluster::new("some/path", pg);
         assert_eq!(Path::new("some/path"), cluster.datadir);
-        assert_eq!(false, cluster.is_running().unwrap());
+        assert_eq!(false, cluster.running().unwrap());
     }
 
     #[test]
