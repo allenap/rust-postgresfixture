@@ -277,15 +277,14 @@ impl Cluster {
     /// Create the cluster if it does not already exist.
     pub fn create(&self) -> Result<bool, ClusterError> {
         self.lock()?.do_exclusive(|| {
-            if !self.datadir.is_dir() {
-                fs::create_dir_all(&self.datadir)?;
-            }
             match self.datadir.join("PG_VERSION").is_file() {
                 // Nothing more to do; the cluster is already in place.
                 true => Ok(false),
-                // Create the cluster and report back that we had to do so.
+                // Create the cluster and report back that we did so.
                 false => {
-                    self.ctl().args(&["init", "-s", "-o", "-E utf8 -A trust"]).output()?;
+                    fs::create_dir_all(&self.datadir)?;
+                    self.ctl().arg("init").arg("-s").arg("-o")
+                        .arg("-E utf8 -A trust").output()?;
                     Ok(true)
                 },
             }
