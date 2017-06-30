@@ -17,7 +17,7 @@ use lock::LockDo;
 
 
 #[derive(Debug)]
-enum VersionError {
+pub enum VersionError {
     IoError(io::Error),
     Invalid(SemVerError),
     Missing,
@@ -46,7 +46,7 @@ fn get_version<P: AsRef<Path>>(pg_ctl: P) -> Result<Version, VersionError> {
 }
 
 
-struct PostgreSQL {
+pub struct PostgreSQL {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.
     ///
@@ -97,7 +97,7 @@ impl PostgreSQL {
 
 
 #[derive(Debug)]
-enum ClusterError {
+pub enum ClusterError {
     IoError(io::Error),
     Unsupported(Version),
     Other(Output),
@@ -110,7 +110,7 @@ impl From<io::Error> for ClusterError {
 }
 
 
-struct Cluster {
+pub struct Cluster {
     /// The data directory of the cluster.
     ///
     /// Corresponds to the `PGDATA` environment variable.
