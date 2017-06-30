@@ -5,70 +5,71 @@ use std::os::unix::io::AsRawFd;
 use nix::fcntl::{flock, FlockArg};
 
 
-// pub fn exclusive<P, F, T>(filename: P, action: F) -> io::Result<T>
-//     where P: AsRef<Path>, F: FnOnce() -> T
-// {
-//     _flock(filename, FlockArg::LockExclusive, action)
-// }
-//
-// pub fn shared<P, F, T>(filename: P, action: F) -> io::Result<T>
-//     where P: AsRef<Path>, F: FnOnce() -> T
-// {
-//     _flock(filename, FlockArg::LockShared, action)
-// }
-//
-// fn _flock<P, F, T>(filename: P, arg: FlockArg, action: F) -> io::Result<T>
-//     where P: AsRef<Path>, F: FnOnce() -> T
-// {
-//     let file = OpenOptions::new()
-//         .append(true).create(true).open(filename)?;
-//     flock(file.as_raw_fd(), arg)?;
-//     Ok(action())
-// }
-
-
+/// Call closures with exclusive or shared locks on _self_, whatever that might mean in context of
+/// the implementation. For example, implementing this for `File` might imply taking advantage of
+/// the platform's advisory locking facilities.
 pub trait LockDo {
 
+    /// Call the given closure with an exclusive lock on _self_.
+    ///
+    /// If _self_ has already been locked elsewhere, this will block until it is able to acquire an
+    /// exclusive lock.
     fn do_exclusive<F, T>(&self, action: F) -> io::Result<T>
         where F: FnOnce() -> T;
 
+    /// Call the given closure with a shared lock on _self_.
+    ///
+    /// If _self_ has already been locked elsewhere, this will block until it is able to acquire a
+    /// shared lock.
     fn do_shared<F, T>(&self, action: F) -> io::Result<T>
         where F: FnOnce() -> T;
 
 }
 
 
-struct FileLockGuard<'a>(&'a File);
-
-impl<'a> Drop for FileLockGuard<'a> {
-    fn drop(&mut self) {
-        flock(self.0.as_raw_fd(), FlockArg::Unlock).unwrap()
-    }
-}
-
-
 impl LockDo for File {
 
+    /// Call the given closure with an exclusive `flock` on this file.
+    ///
+    /// If this file has already been locked elsewhere (via another file descriptor in this
+    /// process, or in another process), this will block until it is able to acquire an
+    /// exclusive lock.
     fn do_exclusive<F, T>(&self, action: F) -> io::Result<T>
         where F: FnOnce() -> T
     {
         let guard = FileLockGuard(&self);
         flock(self.as_raw_fd(), FlockArg::LockExclusive)?;
         let result = action();
-        drop(guard);  // Will happen implicitly anyway.
+        drop(guard);  // Will happen implicitly anyway on exit from this function.
         Ok(result)
     }
 
+    /// Call the given closure with a shared `flock` on this file.
+    ///
+    /// If this file has already been locked elsewhere (via another file descriptor in this
+    /// process, or in another process), this will block until it is able to acquire a shared
+    /// lock.
     fn do_shared<F, T>(&self, action: F) -> io::Result<T>
         where F: FnOnce() -> T
     {
         let guard = FileLockGuard(&self);
         flock(self.as_raw_fd(), FlockArg::LockShared)?;
         let result = action();
-        drop(guard);  // Will happen implicitly anyway.
+        drop(guard);  // Will happen implicitly anyway on exit from this function.
         Ok(result)
     }
 
+}
+
+
+/// Guard used by `LockDo for File` to ensure that the given file is closed during unwinding, thus
+/// releasing all locks.
+struct FileLockGuard<'a>(&'a File);
+
+impl<'a> Drop for FileLockGuard<'a> {
+    fn drop(&mut self) {
+        flock(self.0.as_raw_fd(), FlockArg::Unlock).unwrap()
+    }
 }
 
 
