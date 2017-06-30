@@ -2,6 +2,7 @@
 
 extern crate nix;
 extern crate semver;
+extern crate shell_escape;
 
 use std::env;
 use std::fs;
@@ -9,6 +10,7 @@ use std::io;
 use std::process::{Command,Output};
 use std::path::{Path,PathBuf};
 use semver::{Version,SemVerError};
+use shell_escape::escape;
 
 mod lock;
 mod util;
@@ -104,6 +106,7 @@ impl PostgreSQL {
 
 #[derive(Debug)]
 pub enum ClusterError {
+    PathEncodingError,  // Path is not UTF-8.
     IoError(io::Error),
     UnsupportedVersion(Version),
     UnknownVersion(VersionError),
@@ -276,19 +279,78 @@ impl Cluster {
 
     /// Create the cluster if it does not already exist.
     pub fn create(&self) -> Result<bool, ClusterError> {
-        self.lock()?.do_exclusive(|| {
-            match self.datadir.join("PG_VERSION").is_file() {
-                // Nothing more to do; the cluster is already in place.
-                true => Ok(false),
-                // Create the cluster and report back that we did so.
-                false => {
-                    fs::create_dir_all(&self.datadir)?;
-                    self.ctl().arg("init").arg("-s").arg("-o")
-                        .arg("-E utf8 -A trust").output()?;
-                    Ok(true)
-                },
-            }
-        })?
+        self.lock()?.do_exclusive(|| self._create())?
+    }
+
+    fn _create(&self) -> Result<bool, ClusterError> {
+        match self.datadir.join("PG_VERSION").is_file() {
+            // Nothing more to do; the cluster is already in place.
+            true => Ok(false),
+            // Create the cluster and report back that we did so.
+            false => {
+                fs::create_dir_all(&self.datadir)?;
+                self.ctl().arg("init").arg("-s").arg("-o")
+                    .arg("-E utf8 -A trust").output()?;
+                Ok(true)
+            },
+        }
+    }
+
+    // Start the cluster if it's not already running.
+    pub fn start(&self) -> Result<bool, ClusterError> {
+        self.lock()?.do_exclusive(|| self._start())?
+    }
+
+    fn _start(&self) -> Result<bool, ClusterError> {
+        // If the cluster's already running, don't do anything.
+        if self.running()? {
+            return Ok(false);
+        }
+        // Ensure that the cluster has been created.
+        self._create()?;
+        // This next thing is kind of a Rust wart, kind of a wart in the `shell-escape` crate. UNIX
+        // paths are all bytes and the only thing they're not allowed to contain is, AFAIK, the
+        // null byte. The encoding is defined by the locale variables, again AFAIK, but there's an
+        // implicit assumption in Rust that `OsString` and its kin are essentially UTF-8. The
+        // `shell-escape` crate only understands `&str` so we have to convert a platform-specific
+        // path string to a Rust string in order to use it. Cargo, another user of `shell-escape`,
+        // uses `to_string_lossy` here, but I'm choosing to be strict and reject any platform path
+        // that's not also valid UTF-8. The question now arises: why do we need `shell-escape`? One
+        // of the arguments we will pass to `pg_ctl` will be used as the argument _list_ when it
+        // invokes `postgres`. Sucks, but there it is.
+        let datadir = self.datadir.as_path().as_os_str()
+            .to_str().ok_or(ClusterError::PathEncodingError)?;
+        // Next, invoke `pg_ctl` to start the cluster.
+        // pg_ctl options:
+        //  -l <file> -- log file.
+        //  -s -- no informational messages.
+        //  -w -- wait until startup is complete.
+        // postgres options:
+        //  -h <arg> -- host name; empty arg means Unix socket only.
+        //  -F -- don't bother fsync'ing.
+        //  -k -- socket directory.
+        self.ctl().arg("start").arg("-l").arg(self.logfile())
+            .arg("-s").arg("-w").arg("-o").arg(
+                format!("-h '' -F -k {}", escape(datadir.into()))).output()?;
+        // We did actually start the cluster; say so.
+        Ok(true)
+    }
+
+    // Stop the cluster if it's running.
+    pub fn stop(&self) -> Result<bool, ClusterError> {
+        self.lock()?.do_exclusive(|| self._stop())?
+    }
+
+    fn _stop(&self) -> Result<bool, ClusterError> {
+        // If the cluster's not already running, don't do anything.
+        if !self.running()? {
+            return Ok(false);
+        }
+        // pg_ctl options:
+        //  -w -- wait for shutdown to complete.
+        //  -m <mode> -- shutdown mode.
+        self.ctl().arg("stop").arg("-s").arg("-w").arg("-m").arg("fast").output()?;
+        Ok(true)
     }
 
 }
@@ -386,4 +448,18 @@ mod tests {
         assert!(cluster.exists());
         assert!(!cluster.create().unwrap());
     }
+
+    #[test]
+    fn cluster_start_stop_starts_and_stops_cluster() {
+        let data_dir = tempdir::TempDir::new("data").unwrap();
+        let pg = PostgreSQL::default();
+        let cluster = Cluster::new(&data_dir, pg);
+        cluster.create().unwrap();
+        assert!(!cluster.running().unwrap());
+        cluster.start().unwrap();
+        assert!(cluster.running().unwrap());
+        cluster.stop().unwrap();
+        assert!(!cluster.running().unwrap());
+    }
+
 }

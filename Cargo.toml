@@ -7,6 +7,7 @@ authors = ["Gavin Panella <gavinpanella@gmail.com>"]
 nix = "^0.8.1"
 postgres = "^0.14.2"
 semver = "^0.7.0"
+shell-escape = "^0.1.3"
 
 [dev-dependencies]
 tempdir = "^0.3"
