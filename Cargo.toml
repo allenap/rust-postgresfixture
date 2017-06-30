@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Gavin Panella <gavinpanella@gmail.com>"]
 
 [dependencies]
+nix = "^0.8.1"
 postgres = "^0.14.2"
 semver = "^0.7.0"
 

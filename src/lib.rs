@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+extern crate nix;
 extern crate semver;
 
 use std::env;
@@ -8,6 +9,7 @@ use std::process::{Command,Output};
 use std::path::{Path,PathBuf};
 use semver::{Version,SemVerError};
 
+mod lock;
 mod util;
 
 
