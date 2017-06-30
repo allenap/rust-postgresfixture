@@ -1,21 +1,22 @@
 #![allow(dead_code)]
 
 extern crate nix;
+extern crate postgres;
 extern crate semver;
 extern crate shell_escape;
+
+mod lock;
+mod util;
 
 use std::env;
 use std::fs;
 use std::io;
 use std::process::{Command,Output};
 use std::path::{Path,PathBuf};
-use semver::{Version,SemVerError};
-use shell_escape::escape;
-
-mod lock;
-mod util;
 
 use lock::LockDo;
+use semver::{Version,SemVerError};
+use shell_escape::escape;
 
 
 #[derive(Debug)]
@@ -76,7 +77,7 @@ impl PostgreSQL {
     /// version numbers are essentially SemVer compatible... I think.
     pub fn version(&self) -> Result<Version, VersionError> {
         // Execute pg_ctl and extract version.
-        let version_output = self.ctl().arg("--version").output()?;
+        let version_output = self.execute("pg_ctl").arg("--version").output()?;
         let version_string = String::from_utf8_lossy(&version_output.stdout);
         match version_string.split_whitespace().last() {
             Some(version) => Ok(version.parse()?),
@@ -84,11 +85,11 @@ impl PostgreSQL {
         }
     }
 
-    pub fn ctl(&self) -> Command {
+    pub fn execute(&self, program: &str) -> Command {
         let mut command;
         match self.bindir {
             Some(ref bindir) => {
-                command = Command::new(bindir.join("pg_ctl"));
+                command = Command::new(bindir.join(program));
                 // For now, panic if we can't manipulate PATH.
                 // TODO: Print warning if this fails.
                 command.env(
@@ -96,7 +97,7 @@ impl PostgreSQL {
                         &bindir, env::var_os("PATH")).unwrap());
             },
             None => {
-                command = Command::new("pg_ctl");
+                command = Command::new(program);
             }
         }
         command
@@ -111,6 +112,8 @@ pub enum ClusterError {
     UnsupportedVersion(Version),
     UnknownVersion(VersionError),
     Other(Output),
+    DatabaseConnectionError(postgres::error::ConnectError),
+    DatabaseError(postgres::error::Error),
 }
 
 impl From<io::Error> for ClusterError {
@@ -122,6 +125,18 @@ impl From<io::Error> for ClusterError {
 impl From<VersionError> for ClusterError {
     fn from(error: VersionError) -> ClusterError {
         ClusterError::UnknownVersion(error)
+    }
+}
+
+impl From<postgres::error::ConnectError> for ClusterError {
+    fn from(error: postgres::error::ConnectError) -> ClusterError {
+        ClusterError::DatabaseConnectionError(error)
+    }
+}
+
+impl From<postgres::error::Error> for ClusterError {
+    fn from(error: postgres::error::Error) -> ClusterError {
+        ClusterError::DatabaseError(error)
     }
 }
 
@@ -149,7 +164,7 @@ impl Cluster {
     }
 
     fn ctl(&self) -> Command {
-        let mut command = self.postgres.ctl();
+        let mut command = self.postgres.execute("pg_ctl");
         command.env("PGDATA", &self.datadir);
         command.env("PGHOST", &self.datadir);
         command
@@ -336,6 +351,35 @@ impl Cluster {
         Ok(true)
     }
 
+    // Connect to this cluster.
+    pub fn connect(&self, database: &str) -> Result<postgres::Connection, ClusterError> {
+        let params = postgres::params::ConnectParams::builder()
+            .user(&env::var("USER").unwrap_or("USER-not-set".to_string()), None)
+            .database(database).build(postgres::params::Host::Unix(self.datadir.clone()));
+        Ok(postgres::Connection::connect(params, postgres::TlsMode::None)?)
+    }
+
+    pub fn shell(&self, database: &str) {
+        let mut command = self.postgres.execute("psql");
+        command.arg("--quiet").arg("--").arg(database);
+        command.env("PGDATA", &self.datadir);
+        command.env("PGHOST", &self.datadir);
+        let status = command
+            .spawn().expect("could not spawn shell")
+            .wait().expect("shell exited badly");
+        if !status.success() {
+            panic!("shell exited {}", status.code().unwrap_or(-1));
+        }
+    }
+
+    // The names of databases in this cluster.
+    pub fn databases(&self) -> Result<Vec<String>, ClusterError> {
+        let conn = self.connect("template1")?;
+        let rows = conn.query("SELECT datname FROM pg_catalog.pg_database", &[])?;
+        let datnames: Vec<String> = rows.iter().map(|row| row.get(0)).collect();
+        Ok(datnames)
+    }
+
     // Stop the cluster if it's running.
     pub fn stop(&self) -> Result<bool, ClusterError> {
         self.lock()?.do_exclusive(|| self._stop())?
@@ -378,6 +422,7 @@ mod tests {
     use super::Cluster;
     use super::PostgreSQL;
 
+    use std::collections::HashSet;
     use std::env;
     use std::fs::File;
     use std::path::{Path,PathBuf};
@@ -487,6 +532,33 @@ mod tests {
         assert!(cluster.exists());
         cluster.destroy().unwrap();
         assert!(!cluster.exists());
+    }
+
+    #[test]
+    fn cluster_connect_connects() {
+        let data_dir = tempdir::TempDir::new("data").unwrap();
+        let pg = PostgreSQL::default();
+        let cluster = Cluster::new(&data_dir, pg);
+        cluster.start().unwrap();
+        cluster.connect("template1").unwrap();
+        cluster.destroy().unwrap();
+    }
+
+    #[test]
+    fn cluster_databases_returns_vec_of_database_names() {
+        let data_dir = tempdir::TempDir::new("data").unwrap();
+        let pg = PostgreSQL::default();
+        let cluster = Cluster::new(&data_dir, pg);
+        cluster.start().unwrap();
+
+        let expected: HashSet<String> =
+            ["postgres", "template0", "template1"]
+                .iter().cloned().map(|s| s.to_string()).collect();
+        let observed: HashSet<String> =
+            cluster.databases().unwrap().iter().cloned().collect();
+        assert_eq!(expected, observed);
+
+        cluster.destroy().unwrap();
     }
 
 }
