@@ -4,6 +4,7 @@ extern crate nix;
 extern crate semver;
 
 use std::env;
+use std::fs;
 use std::io;
 use std::process::{Command,Output};
 use std::path::{Path,PathBuf};
@@ -11,6 +12,8 @@ use semver::{Version,SemVerError};
 
 mod lock;
 mod util;
+
+use lock::LockDo;
 
 
 #[derive(Debug)]
@@ -112,6 +115,8 @@ struct Cluster {
     ///
     /// Corresponds to the `PGDATA` environment variable.
     datadir: PathBuf,
+    /// Lock file.
+    lockfile: PathBuf,
     /// The installation of PostgreSQL to use with this cluster.
     postgres: PostgreSQL,
 }
@@ -120,7 +125,7 @@ impl Cluster {
 
     pub fn new<P: AsRef<Path>>(datadir: P, postgres: PostgreSQL) -> Self {
         let datadir = datadir.as_ref();
-        Cluster{
+        Self{
             datadir: datadir.to_path_buf(),
             lockfile: datadir.parent().unwrap_or(datadir).join(".cluster.lock").to_path_buf(),
             postgres: postgres,
@@ -251,6 +256,29 @@ impl Cluster {
         self.datadir.join("backend.log")
     }
 
+    /// Return an open `File` for this cluster's lock file.
+    fn lock(&self) -> io::Result<fs::File> {
+        fs::OpenOptions::new().append(true).create(true).open(&self.lockfile)
+    }
+
+    /// Create the cluster if it does not already exist.
+    pub fn create(&self) -> Result<bool, ClusterError> {
+        self.lock()?.do_exclusive(|| {
+            if !self.datadir.is_dir() {
+                fs::create_dir_all(&self.datadir)?;
+            }
+            match self.datadir.join("PG_VERSION").is_file() {
+                // Nothing more to do; the cluster is already in place.
+                true => Ok(false),
+                // Create the cluster and report back that we had to do so.
+                false => {
+                    self.ctl().args(&["init", "-s", "-o", "-E utf8 -A trust"]).output()?;
+                    Ok(true)
+                },
+            }
+        })?
+    }
+
 }
 
 
@@ -283,7 +311,7 @@ mod tests {
     }
 
     #[test]
-    fn create_new_cluster() {
+    fn cluster_new() {
         let pg = PostgreSQL{bindir: None, version: "9.5.2".parse().unwrap()};
         let cluster = Cluster::new("some/path", pg);
         assert_eq!(Path::new("some/path"), cluster.datadir);
@@ -321,5 +349,26 @@ mod tests {
         let pg = PostgreSQL{bindir: None, version: "1.2.3".parse().unwrap()};
         let cluster = Cluster::new(&data_dir, pg);
         assert_eq!(PathBuf::from("/some/where/backend.log"), cluster.logfile());
+    }
+
+    #[test]
+    fn cluster_create_creates_cluster() {
+        let data_dir = tempdir::TempDir::new("data").unwrap();
+        let pg = PostgreSQL::default().unwrap();
+        let cluster = Cluster::new(&data_dir, pg);
+        assert!(!cluster.exists());
+        assert!(cluster.create().unwrap());
+        assert!(cluster.exists());
+    }
+
+    #[test]
+    fn cluster_create_does_nothing_when_it_already_exists() {
+        let data_dir = tempdir::TempDir::new("data").unwrap();
+        let pg = PostgreSQL::default().unwrap();
+        let cluster = Cluster::new(&data_dir, pg);
+        assert!(!cluster.exists());
+        assert!(cluster.create().unwrap());
+        assert!(cluster.exists());
+        assert!(!cluster.create().unwrap());
     }
 }
