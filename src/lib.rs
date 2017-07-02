@@ -375,6 +375,20 @@ impl Cluster {
         Ok(datnames)
     }
 
+    /// Create the named database.
+    pub fn createdb(&self, database: &str) -> Result<bool, ClusterError> {
+        self.connect("template1")?.execute(
+            &format!("CREATE DATABASE {}", &database), &[])?;
+        Ok(true)
+    }
+
+    /// Drop the named database.
+    pub fn dropdb(&self, database: &str) -> Result<bool, ClusterError> {
+        self.connect("template1")?.execute(
+            &format!("DROP DATABASE {}", &database), &[])?;
+        Ok(true)
+    }
+
     // Stop the cluster if it's running.
     pub fn stop(&self) -> Result<bool, ClusterError> {
         self.lock()?.do_exclusive(|| self._stop())?

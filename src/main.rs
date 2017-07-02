@@ -65,6 +65,9 @@ fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
         postgresfixture::PostgreSQL::default(),
     );
     cluster.start().expect("could not start cluster");
+    if !cluster.databases().unwrap().contains(&database_name.to_string()) {
+        cluster.createdb(database_name).unwrap();
+    }
     cluster.shell(&database_name).expect("shell failed");
     cluster.stop().expect("could not stop cluster");
     0
