@@ -58,7 +58,10 @@ fn parse_args() -> clap::ArgMatches<'static> {
 
 fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
     let cluster = postgresfixture::Cluster::new(
-        &database_dir.canonicalize().unwrap(),
+        match database_dir.is_absolute() {
+            false => env::current_dir().unwrap().join(database_dir),
+            true => database_dir,
+        },
         postgresfixture::PostgreSQL::default(),
     );
     cluster.start().expect("could not start cluster");
