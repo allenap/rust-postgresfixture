@@ -62,7 +62,7 @@ fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
             false => env::current_dir().unwrap().join(database_dir),
             true => database_dir,
         },
-        postgresfixture::PostgreSQL::default(),
+        postgresfixture::Runtime::default(),
     );
     cluster.start().expect("could not start cluster");
     if !cluster.databases().unwrap().contains(&database_name.to_string()) {

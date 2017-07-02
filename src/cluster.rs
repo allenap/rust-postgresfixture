@@ -55,12 +55,12 @@ pub struct Cluster {
     /// Lock file.
     lockfile: PathBuf,
     /// The installation of PostgreSQL to use with this cluster.
-    postgres: runtime::PostgreSQL,
+    postgres: runtime::Runtime,
 }
 
 impl Cluster {
 
-    pub fn new<P: AsRef<Path>>(datadir: P, postgres: runtime::PostgreSQL) -> Self {
+    pub fn new<P: AsRef<Path>>(datadir: P, postgres: runtime::Runtime) -> Self {
         let datadir = datadir.as_ref();
         Self{
             datadir: datadir.to_path_buf(),
@@ -335,7 +335,7 @@ mod tests {
     extern crate tempdir;
 
     use super::Cluster;
-    use super::PostgreSQL;
+    use runtime::Runtime;
 
     use std::collections::HashSet;
     use std::env;
@@ -350,30 +350,30 @@ mod tests {
     #[test]
     fn postgres_new() {
         let bindir = find_bindir();
-        let pg = PostgreSQL::new(&bindir);
-        assert_eq!(Some(bindir), pg.bindir);
+        let runtime = Runtime::new(&bindir);
+        assert_eq!(Some(bindir), runtime.bindir);
     }
 
     #[test]
     fn postgres_default() {
-        let pg = PostgreSQL::default();
-        assert_eq!(None, pg.bindir);
-        let pg: PostgreSQL = Default::default();  // Via trait.
-        assert_eq!(None, pg.bindir);
+        let runtime = Runtime::default();
+        assert_eq!(None, runtime.bindir);
+        let runtime: Runtime = Default::default();  // Via trait.
+        assert_eq!(None, runtime.bindir);
     }
 
     #[test]
     fn cluster_new() {
-        let pg = PostgreSQL{bindir: None};
-        let cluster = Cluster::new("some/path", pg);
+        let runtime = Runtime{bindir: None};
+        let cluster = Cluster::new("some/path", runtime);
         assert_eq!(Path::new("some/path"), cluster.datadir);
         assert_eq!(false, cluster.running().unwrap());
     }
 
     #[test]
     fn cluster_does_not_exist() {
-        let pg = PostgreSQL{bindir: None};
-        let cluster = Cluster::new("some/path", pg);
+        let runtime = Runtime{bindir: None};
+        let cluster = Cluster::new("some/path", runtime);
         assert!(!cluster.exists());
     }
 
@@ -382,32 +382,32 @@ mod tests {
         let data_dir = tempdir::TempDir::new("data").unwrap();
         let version_file = data_dir.path().join("PG_VERSION");
         File::create(&version_file).unwrap();
-        let pg = PostgreSQL{bindir: None};
-        let cluster = Cluster::new(&data_dir, pg);
+        let runtime = Runtime{bindir: None};
+        let cluster = Cluster::new(&data_dir, runtime);
         assert!(cluster.exists());
     }
 
     #[test]
     fn cluster_has_pid_file() {
         let data_dir = PathBuf::from("/some/where");
-        let pg = PostgreSQL{bindir: None};
-        let cluster = Cluster::new(&data_dir, pg);
+        let runtime = Runtime{bindir: None};
+        let cluster = Cluster::new(&data_dir, runtime);
         assert_eq!(PathBuf::from("/some/where/postmaster.pid"), cluster.pidfile());
     }
 
     #[test]
     fn cluster_has_log_file() {
         let data_dir = PathBuf::from("/some/where");
-        let pg = PostgreSQL{bindir: None};
-        let cluster = Cluster::new(&data_dir, pg);
+        let runtime = Runtime{bindir: None};
+        let cluster = Cluster::new(&data_dir, runtime);
         assert_eq!(PathBuf::from("/some/where/backend.log"), cluster.logfile());
     }
 
     #[test]
     fn cluster_create_creates_cluster() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let pg = PostgreSQL::default();
-        let cluster = Cluster::new(&data_dir, pg);
+        let runtime = Runtime::default();
+        let cluster = Cluster::new(&data_dir, runtime);
         assert!(!cluster.exists());
         assert!(cluster.create().unwrap());
         assert!(cluster.exists());
@@ -416,8 +416,8 @@ mod tests {
     #[test]
     fn cluster_create_does_nothing_when_it_already_exists() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let pg = PostgreSQL::default();
-        let cluster = Cluster::new(&data_dir, pg);
+        let runtime = Runtime::default();
+        let cluster = Cluster::new(&data_dir, runtime);
         assert!(!cluster.exists());
         assert!(cluster.create().unwrap());
         assert!(cluster.exists());
@@ -427,8 +427,8 @@ mod tests {
     #[test]
     fn cluster_start_stop_starts_and_stops_cluster() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let pg = PostgreSQL::default();
-        let cluster = Cluster::new(&data_dir, pg);
+        let runtime = Runtime::default();
+        let cluster = Cluster::new(&data_dir, runtime);
         cluster.create().unwrap();
         assert!(!cluster.running().unwrap());
         cluster.start().unwrap();
@@ -440,8 +440,8 @@ mod tests {
     #[test]
     fn cluster_destroy_stops_and_removes_cluster() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let pg = PostgreSQL::default();
-        let cluster = Cluster::new(&data_dir, pg);
+        let runtime = Runtime::default();
+        let cluster = Cluster::new(&data_dir, runtime);
         cluster.create().unwrap();
         cluster.start().unwrap();
         assert!(cluster.exists());
@@ -452,8 +452,8 @@ mod tests {
     #[test]
     fn cluster_connect_connects() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let pg = PostgreSQL::default();
-        let cluster = Cluster::new(&data_dir, pg);
+        let runtime = Runtime::default();
+        let cluster = Cluster::new(&data_dir, runtime);
         cluster.start().unwrap();
         cluster.connect("template1").unwrap();
         cluster.destroy().unwrap();
@@ -462,8 +462,8 @@ mod tests {
     #[test]
     fn cluster_databases_returns_vec_of_database_names() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let pg = PostgreSQL::default();
-        let cluster = Cluster::new(&data_dir, pg);
+        let runtime = Runtime::default();
+        let cluster = Cluster::new(&data_dir, runtime);
         cluster.start().unwrap();
 
         let expected: HashSet<String> =

@@ -3,8 +3,6 @@ use std::io;
 use std::process::Command;
 use std::path::{Path,PathBuf};
 
-use runtime;
-use postgres;
 use semver::{Version,SemVerError};
 use util;
 
@@ -29,21 +27,21 @@ impl From<SemVerError> for VersionError {
 }
 
 
-pub struct PostgreSQL {
+pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.
     ///
     /// Can be omitted (i.e. `None`) to search `PATH` only.
-    bindir: Option<PathBuf>,
+    pub bindir: Option<PathBuf>,
 }
 
-impl Default for PostgreSQL {
+impl Default for Runtime {
     fn default() -> Self {
         Self{bindir: None}
     }
 }
 
-impl PostgreSQL {
+impl Runtime {
 
     pub fn new<P: AsRef<Path>>(bindir: P) -> Self {
         Self{bindir: Some(bindir.as_ref().to_path_buf())}
@@ -87,13 +85,10 @@ impl PostgreSQL {
 mod tests {
     extern crate tempdir;
 
-    use super::Cluster;
-    use super::PostgreSQL;
+    use super::Runtime;
 
-    use std::collections::HashSet;
     use std::env;
-    use std::fs::File;
-    use std::path::{Path,PathBuf};
+    use std::path::PathBuf;
 
     fn find_bindir() -> PathBuf {
         env::split_paths(&env::var_os("PATH").expect("PATH not set"))
@@ -103,15 +98,15 @@ mod tests {
     #[test]
     fn postgres_new() {
         let bindir = find_bindir();
-        let pg = PostgreSQL::new(&bindir);
+        let pg = Runtime::new(&bindir);
         assert_eq!(Some(bindir), pg.bindir);
     }
 
     #[test]
     fn postgres_default() {
-        let pg = PostgreSQL::default();
+        let pg = Runtime::default();
         assert_eq!(None, pg.bindir);
-        let pg: PostgreSQL = Default::default();  // Via trait.
+        let pg: Runtime = Default::default();  // Via trait.
         assert_eq!(None, pg.bindir);
     }
 
