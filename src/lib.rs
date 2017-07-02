@@ -111,9 +111,9 @@ pub enum ClusterError {
     IoError(io::Error),
     UnsupportedVersion(Version),
     UnknownVersion(VersionError),
-    Other(Output),
-    DatabaseConnectionError(postgres::error::ConnectError),
+    DatabaseConnectError(postgres::error::ConnectError),
     DatabaseError(postgres::error::Error),
+    Other(Output),
 }
 
 impl From<io::Error> for ClusterError {
@@ -130,7 +130,7 @@ impl From<VersionError> for ClusterError {
 
 impl From<postgres::error::ConnectError> for ClusterError {
     fn from(error: postgres::error::ConnectError) -> ClusterError {
-        ClusterError::DatabaseConnectionError(error)
+        ClusterError::DatabaseConnectError(error)
     }
 }
 
