@@ -1,3 +1,5 @@
 target/
 **/*.rs.bk
+**/scratch.rs
 Cargo.lock
+.*.lock
