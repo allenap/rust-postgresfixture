@@ -11,7 +11,7 @@ mod util;
 use std::env;
 use std::fs;
 use std::io;
-use std::process::{Command,Output};
+use std::process::{Command,ExitStatus,Output};
 use std::path::{Path,PathBuf};
 
 use lock::LockDo;
@@ -359,17 +359,12 @@ impl Cluster {
         Ok(postgres::Connection::connect(params, postgres::TlsMode::None)?)
     }
 
-    pub fn shell(&self, database: &str) {
+    pub fn shell(&self, database: &str) -> Result<ExitStatus, ClusterError> {
         let mut command = self.postgres.execute("psql");
         command.arg("--quiet").arg("--").arg(database);
         command.env("PGDATA", &self.datadir);
         command.env("PGHOST", &self.datadir);
-        let status = command
-            .spawn().expect("could not spawn shell")
-            .wait().expect("shell exited badly");
-        if !status.success() {
-            panic!("shell exited {}", status.code().unwrap_or(-1));
-        }
+        Ok(command.spawn()?.wait()?)
     }
 
     // The names of databases in this cluster.
