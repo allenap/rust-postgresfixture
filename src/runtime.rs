@@ -119,14 +119,14 @@ mod tests {
     }
 
     #[test]
-    fn postgres_new() {
+    fn runtime_new() {
         let bindir = find_bindir();
         let pg = Runtime::new(&bindir);
         assert_eq!(Some(bindir), pg.bindir);
     }
 
     #[test]
-    fn postgres_default() {
+    fn runtime_default() {
         let pg = Runtime::default();
         assert_eq!(None, pg.bindir);
         let pg: Runtime = Default::default();  // Via trait.

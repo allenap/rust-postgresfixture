@@ -86,22 +86,22 @@ pub struct Cluster {
     /// Lock file.
     lockfile: PathBuf,
     /// The installation of PostgreSQL to use with this cluster.
-    postgres: runtime::Runtime,
+    runtime: runtime::Runtime,
 }
 
 impl Cluster {
 
-    pub fn new<P: AsRef<Path>>(datadir: P, postgres: runtime::Runtime) -> Self {
+    pub fn new<P: AsRef<Path>>(datadir: P, runtime: runtime::Runtime) -> Self {
         let datadir = datadir.as_ref();
         Self{
             datadir: datadir.to_path_buf(),
             lockfile: datadir.parent().unwrap_or(datadir).join(".cluster.lock").to_path_buf(),
-            postgres: postgres,
+            runtime: runtime,
         }
     }
 
     fn ctl(&self) -> Command {
-        let mut command = self.postgres.execute("pg_ctl");
+        let mut command = self.runtime.execute("pg_ctl");
         command.env("PGDATA", &self.datadir);
         command.env("PGHOST", &self.datadir);
         command
@@ -128,7 +128,7 @@ impl Cluster {
             // More work required to decode what this means.
             Some(code) => code,
         };
-        let version = self.postgres.version()?;
+        let version = self.runtime.version()?;
         // PostgreSQL has evolved to return different error codes in
         // later versions, so here we check for specific codes to avoid
         // masking errors from insufficient permissions or missing
@@ -297,7 +297,7 @@ impl Cluster {
     }
 
     pub fn shell(&self, database: &str) -> Result<ExitStatus, ClusterError> {
-        let mut command = self.postgres.execute("psql");
+        let mut command = self.runtime.execute("psql");
         command.arg("--quiet").arg("--").arg(database);
         command.env("PGDATA", &self.datadir);
         command.env("PGHOST", &self.datadir);
@@ -369,29 +369,8 @@ mod tests {
     use runtime::Runtime;
 
     use std::collections::HashSet;
-    use std::env;
     use std::fs::File;
     use std::path::{Path,PathBuf};
-
-    fn find_bindir() -> PathBuf {
-        env::split_paths(&env::var_os("PATH").expect("PATH not set"))
-            .find(|path| path.join("pg_ctl").exists()).expect("pg_ctl not on PATH")
-    }
-
-    #[test]
-    fn postgres_new() {
-        let bindir = find_bindir();
-        let runtime = Runtime::new(&bindir);
-        assert_eq!(Some(bindir), runtime.bindir);
-    }
-
-    #[test]
-    fn postgres_default() {
-        let runtime = Runtime::default();
-        assert_eq!(None, runtime.bindir);
-        let runtime: Runtime = Default::default();  // Via trait.
-        assert_eq!(None, runtime.bindir);
-    }
 
     #[test]
     fn cluster_new() {
