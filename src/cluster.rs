@@ -1,13 +1,12 @@
-use std::env;
-use std::fs;
-use std::io;
+use std::{env,error,fmt,fs,io};
 use std::process::{Command,ExitStatus,Output};
 use std::path::{Path,PathBuf};
+
 
 use lock::LockDo;
 use postgres;
 use runtime;
-use semver::Version;
+use semver;
 use shell_escape::escape;
 
 
@@ -15,11 +14,43 @@ use shell_escape::escape;
 pub enum ClusterError {
     PathEncodingError,  // Path is not UTF-8.
     IoError(io::Error),
-    UnsupportedVersion(Version),
+    UnsupportedVersion(semver::Version),
     UnknownVersion(runtime::VersionError),
     DatabaseConnectError(postgres::error::ConnectError),
     DatabaseError(postgres::error::Error),
     Other(Output),
+}
+
+impl fmt::Display for ClusterError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}", (self as &error::Error).description())
+    }
+}
+
+impl error::Error for ClusterError {
+    fn description(&self) -> &str {
+        match *self {
+            ClusterError::PathEncodingError => "path is not UTF-8",
+            ClusterError::IoError(_) => "input/output error",
+            ClusterError::UnsupportedVersion(_) => "PostgreSQL version not supported",
+            ClusterError::UnknownVersion(_) => "PostgreSQL version not known",
+            ClusterError::DatabaseConnectError(_) => "could not connect to database",
+            ClusterError::DatabaseError(_) => "database error",
+            ClusterError::Other(_) => "external command failed",
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            ClusterError::PathEncodingError => None,
+            ClusterError::IoError(ref error) => Some(error),
+            ClusterError::UnsupportedVersion(_) => None,
+            ClusterError::UnknownVersion(ref error) => Some(error),
+            ClusterError::DatabaseConnectError(ref error) => Some(error),
+            ClusterError::DatabaseError(ref error) => Some(error),
+            ClusterError::Other(_) => None,
+        }
+    }
 }
 
 impl From<io::Error> for ClusterError {

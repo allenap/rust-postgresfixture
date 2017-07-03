@@ -1,17 +1,40 @@
-use std::env;
-use std::io;
+use std::{env,error,fmt,io};
 use std::process::Command;
 use std::path::{Path,PathBuf};
 
-use semver::{Version,SemVerError};
+use semver;
 use util;
 
 
 #[derive(Debug)]
 pub enum VersionError {
     IoError(io::Error),
-    Invalid(SemVerError),
+    Invalid(semver::SemVerError),
     Missing,
+}
+
+impl fmt::Display for VersionError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}", (self as &error::Error).description())
+    }
+}
+
+impl error::Error for VersionError {
+    fn description(&self) -> &str {
+        match *self {
+            VersionError::IoError(_) => "input/output error",
+            VersionError::Invalid(_) => "version was badly formed",
+            VersionError::Missing => "version information not found",
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            VersionError::IoError(ref error) => Some(error),
+            VersionError::Invalid(ref error) => Some(error),
+            VersionError::Missing => None,
+        }
+    }
 }
 
 impl From<io::Error> for VersionError {
@@ -20,8 +43,8 @@ impl From<io::Error> for VersionError {
     }
 }
 
-impl From<SemVerError> for VersionError {
-    fn from(error: SemVerError) -> VersionError {
+impl From<semver::SemVerError> for VersionError {
+    fn from(error: semver::SemVerError) -> VersionError {
         VersionError::Invalid(error)
     }
 }
@@ -51,7 +74,7 @@ impl Runtime {
     ///
     /// https://www.postgresql.org/support/versioning/ shows that
     /// version numbers are essentially SemVer compatible... I think.
-    pub fn version(&self) -> Result<Version, VersionError> {
+    pub fn version(&self) -> Result<semver::Version, VersionError> {
         // Execute pg_ctl and extract version.
         let version_output = self.execute("pg_ctl").arg("--version").output()?;
         let version_string = String::from_utf8_lossy(&version_output.stdout);
