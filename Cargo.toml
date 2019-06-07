@@ -14,7 +14,7 @@ doc = false
 
 [dependencies]
 clap = "^2.24.2"
-nix = "^0.8.1"
+nix = "^0.14.1"
 postgres = "^0.14.2"
 semver = "^0.7.0"
 shell-escape = "^0.1.3"
