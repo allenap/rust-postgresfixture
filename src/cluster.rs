@@ -16,7 +16,6 @@ pub enum ClusterError {
     IoError(io::Error),
     UnsupportedVersion(semver::Version),
     UnknownVersion(runtime::VersionError),
-    DatabaseConnectError(postgres::error::ConnectError),
     DatabaseError(postgres::error::Error),
     Other(Output),
 }
@@ -34,7 +33,6 @@ impl error::Error for ClusterError {
             ClusterError::IoError(_) => "input/output error",
             ClusterError::UnsupportedVersion(_) => "PostgreSQL version not supported",
             ClusterError::UnknownVersion(_) => "PostgreSQL version not known",
-            ClusterError::DatabaseConnectError(_) => "could not connect to database",
             ClusterError::DatabaseError(_) => "database error",
             ClusterError::Other(_) => "external command failed",
         }
@@ -46,7 +44,6 @@ impl error::Error for ClusterError {
             ClusterError::IoError(ref error) => Some(error),
             ClusterError::UnsupportedVersion(_) => None,
             ClusterError::UnknownVersion(ref error) => Some(error),
-            ClusterError::DatabaseConnectError(ref error) => Some(error),
             ClusterError::DatabaseError(ref error) => Some(error),
             ClusterError::Other(_) => None,
         }
@@ -62,12 +59,6 @@ impl From<io::Error> for ClusterError {
 impl From<runtime::VersionError> for ClusterError {
     fn from(error: runtime::VersionError) -> ClusterError {
         ClusterError::UnknownVersion(error)
-    }
-}
-
-impl From<postgres::error::ConnectError> for ClusterError {
-    fn from(error: postgres::error::ConnectError) -> ClusterError {
-        ClusterError::DatabaseConnectError(error)
     }
 }
 
@@ -326,11 +317,13 @@ impl Cluster {
     }
 
     // Connect to this cluster.
-    pub fn connect(&self, database: &str) -> Result<postgres::Connection, ClusterError> {
-        let params = postgres::params::ConnectParams::builder()
-            .user(&env::var("USER").unwrap_or("USER-not-set".to_string()), None)
-            .database(database).build(postgres::params::Host::Unix(self.datadir.clone()));
-        Ok(postgres::Connection::connect(params, postgres::TlsMode::None)?)
+    pub fn connect(&self, database: &str) -> Result<postgres::Client, ClusterError> {
+        let user = &env::var("USER").unwrap_or("USER-not-set".to_string());
+        let host = self.datadir.to_string_lossy(); // postgres crate API limitation.
+        let client = postgres::Client::configure()
+            .user(user).dbname(database).host(&host)
+            .connect(postgres::NoTls)?;
+        Ok(client)
     }
 
     pub fn shell(&self, database: &str) -> Result<ExitStatus, ClusterError> {
@@ -343,7 +336,7 @@ impl Cluster {
 
     // The names of databases in this cluster.
     pub fn databases(&self) -> Result<Vec<String>, ClusterError> {
-        let conn = self.connect("template1")?;
+        let mut conn = self.connect("template1")?;
         let rows = conn.query("SELECT datname FROM pg_catalog.pg_database", &[])?;
         let datnames: Vec<String> = rows.iter().map(|row| row.get(0)).collect();
         Ok(datnames)
@@ -351,15 +344,15 @@ impl Cluster {
 
     /// Create the named database.
     pub fn createdb(&self, database: &str) -> Result<bool, ClusterError> {
-        self.connect("template1")?.execute(
-            &format!("CREATE DATABASE {}", &database), &[])?;
+        let statement = format!("CREATE DATABASE {}", &database);
+        self.connect("template1")?.execute(statement.as_str(), &[])?;
         Ok(true)
     }
 
     /// Drop the named database.
     pub fn dropdb(&self, database: &str) -> Result<bool, ClusterError> {
-        self.connect("template1")?.execute(
-            &format!("DROP DATABASE {}", &database), &[])?;
+        let statement = format!("DROP DATABASE {}", &database);
+        self.connect("template1")?.execute(statement.as_str(), &[])?;
         Ok(true)
     }
 
