@@ -3,6 +3,7 @@ use std::io;
 use std::os::unix::io::AsRawFd;
 
 use nix::fcntl::{flock, FlockArg};
+use nix::Result;
 
 
 /// Call closures with exclusive or shared locks on _self_, whatever that might mean in context of
@@ -14,14 +15,14 @@ pub trait LockDo {
     ///
     /// If _self_ has already been locked elsewhere, this will block until it is able to acquire an
     /// exclusive lock.
-    fn do_exclusive<F, T>(&self, action: F) -> io::Result<T>
+    fn do_exclusive<F, T>(&self, action: F) -> Result<T>
         where F: FnOnce() -> T;
 
     /// Call the given closure with a shared lock on _self_.
     ///
     /// If _self_ has already been locked elsewhere, this will block until it is able to acquire a
     /// shared lock.
-    fn do_shared<F, T>(&self, action: F) -> io::Result<T>
+    fn do_shared<F, T>(&self, action: F) -> Result<T>
         where F: FnOnce() -> T;
 
 }
@@ -34,7 +35,7 @@ impl LockDo for File {
     /// If this file has already been locked elsewhere (via another file descriptor in this
     /// process, or in another process), this will block until it is able to acquire an
     /// exclusive lock.
-    fn do_exclusive<F, T>(&self, action: F) -> io::Result<T>
+    fn do_exclusive<F, T>(&self, action: F) -> Result<T>
         where F: FnOnce() -> T
     {
         let guard = FileLockGuard(&self);
@@ -49,7 +50,7 @@ impl LockDo for File {
     /// If this file has already been locked elsewhere (via another file descriptor in this
     /// process, or in another process), this will block until it is able to acquire a shared
     /// lock.
-    fn do_shared<F, T>(&self, action: F) -> io::Result<T>
+    fn do_shared<F, T>(&self, action: F) -> Result<T>
         where F: FnOnce() -> T
     {
         let guard = FileLockGuard(&self);

@@ -14,6 +14,7 @@ use shell_escape::escape;
 pub enum ClusterError {
     PathEncodingError,  // Path is not UTF-8.
     IoError(io::Error),
+    UnixError(nix::Error),
     UnsupportedVersion(semver::Version),
     UnknownVersion(runtime::VersionError),
     DatabaseError(postgres::error::Error),
@@ -31,6 +32,7 @@ impl error::Error for ClusterError {
         match *self {
             ClusterError::PathEncodingError => "path is not UTF-8",
             ClusterError::IoError(_) => "input/output error",
+            ClusterError::UnixError(_) => "UNIX error",
             ClusterError::UnsupportedVersion(_) => "PostgreSQL version not supported",
             ClusterError::UnknownVersion(_) => "PostgreSQL version not known",
             ClusterError::DatabaseError(_) => "database error",
@@ -42,6 +44,7 @@ impl error::Error for ClusterError {
         match *self {
             ClusterError::PathEncodingError => None,
             ClusterError::IoError(ref error) => Some(error),
+            ClusterError::UnixError(ref error) => Some(error),
             ClusterError::UnsupportedVersion(_) => None,
             ClusterError::UnknownVersion(ref error) => Some(error),
             ClusterError::DatabaseError(ref error) => Some(error),
@@ -53,6 +56,12 @@ impl error::Error for ClusterError {
 impl From<io::Error> for ClusterError {
     fn from(error: io::Error) -> ClusterError {
         ClusterError::IoError(error)
+    }
+}
+
+impl From<nix::Error> for ClusterError {
+    fn from(error: nix::Error) -> ClusterError {
+        ClusterError::UnixError(error)
     }
 }
 
