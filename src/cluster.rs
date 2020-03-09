@@ -5,7 +5,6 @@ use std::{env, error, fmt, fs, io};
 use lock::LockDo;
 use postgres;
 use runtime;
-use semver;
 use shell_escape::escape;
 
 #[derive(Debug)]
@@ -13,7 +12,7 @@ pub enum ClusterError {
     PathEncodingError, // Path is not UTF-8.
     IoError(io::Error),
     UnixError(nix::Error),
-    UnsupportedVersion(semver::Version),
+    UnsupportedVersion(runtime::Version),
     UnknownVersion(runtime::VersionError),
     DatabaseError(postgres::error::Error),
     Other(Output),

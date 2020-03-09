@@ -1,6 +1,6 @@
 extern crate nix;
 extern crate postgres;
-extern crate semver;
+extern crate regex;
 extern crate shell_escape;
 
 mod cluster;

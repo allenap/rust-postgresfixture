@@ -1,14 +1,72 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{env, error, fmt, io};
+use std::str::FromStr;
+use std::{env, error, fmt, io, num};
 
-use semver;
+use regex::Regex;
 use util;
+
+#[derive(Debug)]
+pub struct Version {
+    pub major: u32,
+    pub minor: u32,
+    pub patch: Option<u32>,
+}
+
+#[derive(Debug)]
+pub enum VersionParseError {
+    Invalid,
+    Missing,
+}
+
+impl fmt::Display for VersionParseError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}", (self as &error::Error).description())
+    }
+}
+
+impl error::Error for VersionParseError {
+    fn description(&self) -> &str {
+        match *self {
+            VersionParseError::Invalid => "version was badly formed",
+            VersionParseError::Missing => "version information not found",
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        None
+    }
+}
+
+impl From<num::ParseIntError> for VersionParseError {
+    fn from(_error: num::ParseIntError) -> VersionParseError {
+        VersionParseError::Invalid
+    }
+}
+
+impl FromStr for Version {
+    type Err = VersionParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let re = Regex::new(r"(?x) \b (\d+) [.] (\d+) (?: [.] (\d+) ) \b").unwrap();
+        match re.captures(s) {
+            Some(caps) => Ok(Version {
+                major: caps[1].parse()?,
+                minor: caps[2].parse()?,
+                patch: match caps.get(3) {
+                    Some(m) => Some(m.as_str().parse()?),
+                    None => None,
+                },
+            }),
+            None => Err(VersionParseError::Missing),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum VersionError {
     IoError(io::Error),
-    Invalid(semver::SemVerError),
+    Invalid(VersionParseError),
     Missing,
 }
 
@@ -42,8 +100,8 @@ impl From<io::Error> for VersionError {
     }
 }
 
-impl From<semver::SemVerError> for VersionError {
-    fn from(error: semver::SemVerError) -> VersionError {
+impl From<VersionParseError> for VersionError {
+    fn from(error: VersionParseError) -> VersionError {
         VersionError::Invalid(error)
     }
 }
@@ -71,9 +129,9 @@ impl Runtime {
 
     /// Get the version number of PostgreSQL.
     ///
-    /// https://www.postgresql.org/support/versioning/ shows that
-    /// version numbers are essentially SemVer compatible... I think.
-    pub fn version(&self) -> Result<semver::Version, VersionError> {
+    /// https://www.postgresql.org/support/versioning/ shows that version
+    /// numbers are NOT SemVer compatible, so we have to parse them ourselves.
+    pub fn version(&self) -> Result<Version, VersionError> {
         // Execute pg_ctl and extract version.
         let version_output = self.execute("pg_ctl").arg("--version").output()?;
         let version_string = String::from_utf8_lossy(&version_output.stdout);
