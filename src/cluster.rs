@@ -1,7 +1,6 @@
-use std::{env,error,fmt,fs,io};
-use std::process::{Command,ExitStatus,Output};
-use std::path::{Path,PathBuf};
-
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitStatus, Output};
+use std::{env, error, fmt, fs, io};
 
 use lock::LockDo;
 use postgres;
@@ -9,10 +8,9 @@ use runtime;
 use semver;
 use shell_escape::escape;
 
-
 #[derive(Debug)]
 pub enum ClusterError {
-    PathEncodingError,  // Path is not UTF-8.
+    PathEncodingError, // Path is not UTF-8.
     IoError(io::Error),
     UnixError(nix::Error),
     UnsupportedVersion(semver::Version),
@@ -77,7 +75,6 @@ impl From<postgres::error::Error> for ClusterError {
     }
 }
 
-
 pub struct Cluster {
     /// The data directory of the cluster.
     ///
@@ -125,14 +122,16 @@ Proposed new locking scheme:
 
 */
 
-
 impl Cluster {
-
     pub fn new<P: AsRef<Path>>(datadir: P, runtime: runtime::Runtime) -> Self {
         let datadir = datadir.as_ref();
-        Self{
+        Self {
             datadir: datadir.to_path_buf(),
-            lockfile: datadir.parent().unwrap_or(datadir).join(".cluster.lock").to_path_buf(),
+            lockfile: datadir
+                .parent()
+                .unwrap_or(datadir)
+                .join(".cluster.lock")
+                .to_path_buf(),
             runtime: runtime,
         }
     }
@@ -145,8 +144,7 @@ impl Cluster {
     }
 
     pub fn exists(&self) -> bool {
-        self.datadir.is_dir() &&
-            self.datadir.join("PG_VERSION").is_file()
+        self.datadir.is_dir() && self.datadir.join("PG_VERSION").is_file()
     }
 
     /// Check if this cluster is running.
@@ -188,7 +186,7 @@ impl Cluster {
                     // For anything else we don't know.
                     _ => None,
                 }
-            },
+            }
             // PostgreSQL 9.x
             9 => {
                 // PostgreSQL 9.4+
@@ -236,7 +234,7 @@ impl Cluster {
                         _ => None,
                     }
                 }
-            },
+            }
             // All other versions.
             _ => None,
         };
@@ -263,7 +261,10 @@ impl Cluster {
 
     /// Return an open `File` for this cluster's lock file.
     fn lock(&self) -> io::Result<fs::File> {
-        fs::OpenOptions::new().append(true).create(true).open(&self.lockfile)
+        fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&self.lockfile)
     }
 
     /// Create the cluster if it does not already exist.
@@ -278,10 +279,14 @@ impl Cluster {
             // Create the cluster and report back that we did so.
             false => {
                 fs::create_dir_all(&self.datadir)?;
-                self.ctl().arg("init").arg("-s").arg("-o")
-                    .arg("-E utf8 -A trust").output()?;
+                self.ctl()
+                    .arg("init")
+                    .arg("-s")
+                    .arg("-o")
+                    .arg("-E utf8 -A trust")
+                    .output()?;
                 Ok(true)
-            },
+            }
         }
     }
 
@@ -307,8 +312,12 @@ impl Cluster {
         // that's not also valid UTF-8. The question now arises: why do we need `shell-escape`? One
         // of the arguments we will pass to `pg_ctl` will be used as the argument _list_ when it
         // invokes `postgres`. Sucks, but there it is.
-        let datadir = self.datadir.as_path().as_os_str()
-            .to_str().ok_or(ClusterError::PathEncodingError)?;
+        let datadir = self
+            .datadir
+            .as_path()
+            .as_os_str()
+            .to_str()
+            .ok_or(ClusterError::PathEncodingError)?;
         // Next, invoke `pg_ctl` to start the cluster.
         // pg_ctl options:
         //  -l <file> -- log file.
@@ -318,9 +327,15 @@ impl Cluster {
         //  -h <arg> -- host name; empty arg means Unix socket only.
         //  -F -- don't bother fsync'ing.
         //  -k -- socket directory.
-        self.ctl().arg("start").arg("-l").arg(self.logfile())
-            .arg("-s").arg("-w").arg("-o").arg(
-                format!("-h '' -F -k {}", escape(datadir.into()))).output()?;
+        self.ctl()
+            .arg("start")
+            .arg("-l")
+            .arg(self.logfile())
+            .arg("-s")
+            .arg("-w")
+            .arg("-o")
+            .arg(format!("-h '' -F -k {}", escape(datadir.into())))
+            .output()?;
         // We did actually start the cluster; say so.
         Ok(true)
     }
@@ -330,7 +345,9 @@ impl Cluster {
         let user = &env::var("USER").unwrap_or("USER-not-set".to_string());
         let host = self.datadir.to_string_lossy(); // postgres crate API limitation.
         let client = postgres::Client::configure()
-            .user(user).dbname(database).host(&host)
+            .user(user)
+            .dbname(database)
+            .host(&host)
             .connect(postgres::NoTls)?;
         Ok(client)
     }
@@ -354,14 +371,16 @@ impl Cluster {
     /// Create the named database.
     pub fn createdb(&self, database: &str) -> Result<bool, ClusterError> {
         let statement = format!("CREATE DATABASE {}", &database);
-        self.connect("template1")?.execute(statement.as_str(), &[])?;
+        self.connect("template1")?
+            .execute(statement.as_str(), &[])?;
         Ok(true)
     }
 
     /// Drop the named database.
     pub fn dropdb(&self, database: &str) -> Result<bool, ClusterError> {
         let statement = format!("DROP DATABASE {}", &database);
-        self.connect("template1")?.execute(statement.as_str(), &[])?;
+        self.connect("template1")?
+            .execute(statement.as_str(), &[])?;
         Ok(true)
     }
 
@@ -378,7 +397,13 @@ impl Cluster {
         // pg_ctl options:
         //  -w -- wait for shutdown to complete.
         //  -m <mode> -- shutdown mode.
-        self.ctl().arg("stop").arg("-s").arg("-w").arg("-m").arg("fast").output()?;
+        self.ctl()
+            .arg("stop")
+            .arg("-s")
+            .arg("-w")
+            .arg("-m")
+            .arg("fast")
+            .output()?;
         Ok(true)
     }
 
@@ -391,14 +416,11 @@ impl Cluster {
         if self._stop()? || self.datadir.is_dir() {
             fs::remove_dir_all(&self.datadir)?;
             Ok(true)
-        }
-        else {
+        } else {
             Ok(false)
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -409,11 +431,11 @@ mod tests {
 
     use std::collections::HashSet;
     use std::fs::File;
-    use std::path::{Path,PathBuf};
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn cluster_new() {
-        let runtime = Runtime{bindir: None};
+        let runtime = Runtime { bindir: None };
         let cluster = Cluster::new("some/path", runtime);
         assert_eq!(Path::new("some/path"), cluster.datadir);
         assert_eq!(false, cluster.running().unwrap());
@@ -421,7 +443,7 @@ mod tests {
 
     #[test]
     fn cluster_does_not_exist() {
-        let runtime = Runtime{bindir: None};
+        let runtime = Runtime { bindir: None };
         let cluster = Cluster::new("some/path", runtime);
         assert!(!cluster.exists());
     }
@@ -431,7 +453,7 @@ mod tests {
         let data_dir = tempdir::TempDir::new("data").unwrap();
         let version_file = data_dir.path().join("PG_VERSION");
         File::create(&version_file).unwrap();
-        let runtime = Runtime{bindir: None};
+        let runtime = Runtime { bindir: None };
         let cluster = Cluster::new(&data_dir, runtime);
         assert!(cluster.exists());
     }
@@ -439,15 +461,18 @@ mod tests {
     #[test]
     fn cluster_has_pid_file() {
         let data_dir = PathBuf::from("/some/where");
-        let runtime = Runtime{bindir: None};
+        let runtime = Runtime { bindir: None };
         let cluster = Cluster::new(&data_dir, runtime);
-        assert_eq!(PathBuf::from("/some/where/postmaster.pid"), cluster.pidfile());
+        assert_eq!(
+            PathBuf::from("/some/where/postmaster.pid"),
+            cluster.pidfile()
+        );
     }
 
     #[test]
     fn cluster_has_log_file() {
         let data_dir = PathBuf::from("/some/where");
-        let runtime = Runtime{bindir: None};
+        let runtime = Runtime { bindir: None };
         let cluster = Cluster::new(&data_dir, runtime);
         assert_eq!(PathBuf::from("/some/where/backend.log"), cluster.logfile());
     }
@@ -515,14 +540,14 @@ mod tests {
         let cluster = Cluster::new(&data_dir, runtime);
         cluster.start().unwrap();
 
-        let expected: HashSet<String> =
-            ["postgres", "template0", "template1"]
-                .iter().cloned().map(|s| s.to_string()).collect();
-        let observed: HashSet<String> =
-            cluster.databases().unwrap().iter().cloned().collect();
+        let expected: HashSet<String> = ["postgres", "template0", "template1"]
+            .iter()
+            .cloned()
+            .map(|s| s.to_string())
+            .collect();
+        let observed: HashSet<String> = cluster.databases().unwrap().iter().cloned().collect();
         assert_eq!(expected, observed);
 
         cluster.destroy().unwrap();
     }
-
 }

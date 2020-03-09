@@ -2,7 +2,6 @@ use std::env;
 use std::ffi::OsString;
 use std::path::Path;
 
-
 type PrependedPath = Result<OsString, env::JoinPathsError>;
 
 /// Prepend the given `dir` to the given `path`.
@@ -11,19 +10,14 @@ type PrependedPath = Result<OsString, env::JoinPathsError>;
 /// *not* update `PATH` in the environment.
 pub fn prepend_to_path(dir: &Path, path: Option<OsString>) -> PrependedPath {
     Ok(match path {
-        None => {
-            env::join_paths(&[dir])?
-        }
+        None => env::join_paths(&[dir])?,
         Some(path) => {
-            let mut paths = vec!(dir.to_path_buf());
-            paths.extend(
-                env::split_paths(&path)
-                    .filter(|path| path != dir));
+            let mut paths = vec![dir.to_path_buf()];
+            paths.extend(env::split_paths(&path).filter(|path| path != dir));
             env::join_paths(paths)?
-        },
+        }
     })
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -36,16 +30,15 @@ mod tests {
         let path = env::join_paths(&[
             tempdir::TempDir::new("aaa").unwrap().path(),
             tempdir::TempDir::new("bbb").unwrap().path(),
-        ]).unwrap();
+        ])
+        .unwrap();
         let tmpdir = tempdir::TempDir::new("bin").unwrap();
         let expected = {
-            let mut tmp = vec!(tmpdir.path().to_path_buf());
+            let mut tmp = vec![tmpdir.path().to_path_buf()];
             tmp.extend(env::split_paths(&path));
             env::join_paths(tmp).unwrap()
         };
-        let observed = {
-            super::prepend_to_path(tmpdir.path(), Some(path)).unwrap()
-        };
+        let observed = { super::prepend_to_path(tmpdir.path(), Some(path)).unwrap() };
         assert_eq!(expected, observed);
     }
 
@@ -56,15 +49,14 @@ mod tests {
             tempdir::TempDir::new("aaa").unwrap().path(),
             tempdir::TempDir::new("bbb").unwrap().path(),
             tmpdir.path(),
-        ]).unwrap();
+        ])
+        .unwrap();
         let expected = {
-            let mut tmp = vec!(tmpdir.path().to_path_buf());
+            let mut tmp = vec![tmpdir.path().to_path_buf()];
             tmp.extend(env::split_paths(&path).take(2));
             env::join_paths(tmp).unwrap()
         };
-        let observed = {
-            super::prepend_to_path(tmpdir.path(), Some(path)).unwrap()
-        };
+        let observed = { super::prepend_to_path(tmpdir.path(), Some(path)).unwrap() };
         assert_eq!(expected, observed);
     }
 
@@ -75,5 +67,4 @@ mod tests {
         let observed = super::prepend_to_path(tmpdir.path(), None).unwrap();
         assert_eq!(expected, observed);
     }
-
 }

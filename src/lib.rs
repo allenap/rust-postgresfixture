@@ -8,5 +8,5 @@ mod lock;
 mod runtime;
 mod util;
 
-pub use cluster::{Cluster,ClusterError};
+pub use cluster::{Cluster, ClusterError};
 pub use runtime::Runtime;

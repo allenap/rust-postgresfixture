@@ -1,10 +1,9 @@
-use std::{env,error,fmt,io};
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::path::{Path,PathBuf};
+use std::{env, error, fmt, io};
 
 use semver;
 use util;
-
 
 #[derive(Debug)]
 pub enum VersionError {
@@ -49,7 +48,6 @@ impl From<semver::SemVerError> for VersionError {
     }
 }
 
-
 pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.
@@ -60,14 +58,15 @@ pub struct Runtime {
 
 impl Default for Runtime {
     fn default() -> Self {
-        Self{bindir: None}
+        Self { bindir: None }
     }
 }
 
 impl Runtime {
-
     pub fn new<P: AsRef<Path>>(bindir: P) -> Self {
-        Self{bindir: Some(bindir.as_ref().to_path_buf())}
+        Self {
+            bindir: Some(bindir.as_ref().to_path_buf()),
+        }
     }
 
     /// Get the version number of PostgreSQL.
@@ -92,9 +91,10 @@ impl Runtime {
                 // For now, panic if we can't manipulate PATH.
                 // TODO: Print warning if this fails.
                 command.env(
-                    "PATH", util::prepend_to_path(
-                        &bindir, env::var_os("PATH")).unwrap());
-            },
+                    "PATH",
+                    util::prepend_to_path(&bindir, env::var_os("PATH")).unwrap(),
+                );
+            }
             None => {
                 command = Command::new(program);
             }
@@ -102,7 +102,6 @@ impl Runtime {
         command
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -115,7 +114,8 @@ mod tests {
 
     fn find_bindir() -> PathBuf {
         env::split_paths(&env::var_os("PATH").expect("PATH not set"))
-            .find(|path| path.join("pg_ctl").exists()).expect("pg_ctl not on PATH")
+            .find(|path| path.join("pg_ctl").exists())
+            .expect("pg_ctl not on PATH")
     }
 
     #[test]
@@ -129,8 +129,7 @@ mod tests {
     fn runtime_default() {
         let pg = Runtime::default();
         assert_eq!(None, pg.bindir);
-        let pg: Runtime = Default::default();  // Via trait.
+        let pg: Runtime = Default::default(); // Via trait.
         assert_eq!(None, pg.bindir);
     }
-
 }
