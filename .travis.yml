@@ -1,5 +1,12 @@
-dist: [bionic, xenial]
+jobs:
+  include:
+    - os: linux
+      dist: xenial
+    - os: linux
+      dist: bionic
+
 language: rust
+
 before_install:
   - sudo apt-get -y install postgresql
   - export PATH="$(printf '%s:' /usr/lib/postgresql/*/bin)$PATH"
