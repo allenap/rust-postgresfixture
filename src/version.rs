@@ -18,7 +18,7 @@ pub enum VersionParseError {
 
 impl fmt::Display for VersionParseError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", (self as &error::Error).description())
+        write!(fmt, "{}", (self as &dyn error::Error).description())
     }
 }
 
@@ -30,7 +30,7 @@ impl error::Error for VersionParseError {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
 }
@@ -69,7 +69,7 @@ pub enum VersionError {
 
 impl fmt::Display for VersionError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", (self as &error::Error).description())
+        write!(fmt, "{}", (self as &dyn error::Error).description())
     }
 }
 
@@ -82,7 +82,7 @@ impl error::Error for VersionError {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             VersionError::IoError(ref error) => Some(error),
             VersionError::Invalid(ref error) => Some(error),

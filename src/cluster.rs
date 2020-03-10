@@ -20,7 +20,7 @@ pub enum ClusterError {
 
 impl fmt::Display for ClusterError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", (self as &error::Error).description())
+        write!(fmt, "{}", (self as &dyn error::Error).description())
     }
 }
 
@@ -37,7 +37,7 @@ impl error::Error for ClusterError {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             ClusterError::PathEncodingError => None,
             ClusterError::IoError(ref error) => Some(error),
