@@ -1,3 +1,4 @@
+dist: [bionic, xenial]
 language: rust
 before_install:
   - sudo apt-get -y install postgresql
