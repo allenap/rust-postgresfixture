@@ -1,8 +1,10 @@
 jobs:
   include:
-    - os: linux
+    - name: Ubuntu Xenial
+      os: linux
       dist: xenial
-    - os: linux
+    - name: Ubuntu Bionic
+      os: linux
       dist: bionic
 
 language: rust
