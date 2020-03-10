@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::io;
 use std::os::unix::io::AsRawFd;
 
 use nix::fcntl::{flock, FlockArg};

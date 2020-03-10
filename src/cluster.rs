@@ -5,7 +5,6 @@ use std::{env, error, fmt, fs, io};
 use lock::LockDo;
 use postgres;
 use runtime;
-use semver;
 use shell_escape::escape;
 
 #[derive(Debug)]
@@ -13,7 +12,7 @@ pub enum ClusterError {
     PathEncodingError, // Path is not UTF-8.
     IoError(io::Error),
     UnixError(nix::Error),
-    UnsupportedVersion(semver::Version),
+    UnsupportedVersion(runtime::Version),
     UnknownVersion(runtime::VersionError),
     DatabaseError(postgres::error::Error),
     Other(Output),
@@ -21,7 +20,7 @@ pub enum ClusterError {
 
 impl fmt::Display for ClusterError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", (self as &error::Error).description())
+        write!(fmt, "{}", (self as &dyn error::Error).description())
     }
 }
 
@@ -38,7 +37,7 @@ impl error::Error for ClusterError {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             ClusterError::PathEncodingError => None,
             ClusterError::IoError(ref error) => Some(error),
