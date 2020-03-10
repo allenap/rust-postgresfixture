@@ -167,9 +167,9 @@ impl Cluster {
         // later versions, so here we check for specific codes to avoid
         // masking errors from insufficient permissions or missing
         // executables, for example.
-        let running = match version.major {
-            // PostgreSQL 10.x
-            10 => {
+        let running = match (version.major >= 10, version.major) {
+            // PostgreSQL 10.x and later.
+            (true, _) => {
                 // PostgreSQL 10
                 // https://www.postgresql.org/docs/10/static/app-pg-ctl.html
                 match code {
@@ -186,8 +186,8 @@ impl Cluster {
                     _ => None,
                 }
             }
-            // PostgreSQL 9.x
-            9 => {
+            // PostgreSQL 9.x only.
+            (false, 9) => {
                 // PostgreSQL 9.4+
                 // https://www.postgresql.org/docs/9.4/static/app-pg-ctl.html
                 // https://www.postgresql.org/docs/9.5/static/app-pg-ctl.html
@@ -235,7 +235,7 @@ impl Cluster {
                 }
             }
             // All other versions.
-            _ => None,
+            (_, _) => None,
         };
 
         match running {
