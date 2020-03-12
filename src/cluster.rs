@@ -20,23 +20,19 @@ pub enum ClusterError {
 
 impl fmt::Display for ClusterError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", (self as &dyn error::Error).description())
+        match *self {
+            ClusterError::PathEncodingError => write!(fmt, "path is not UTF-8"),
+            ClusterError::IoError(_) => write!(fmt, "input/output error"),
+            ClusterError::UnixError(_) => write!(fmt, "UNIX error"),
+            ClusterError::UnsupportedVersion(_) => write!(fmt, "PostgreSQL version not supported"),
+            ClusterError::UnknownVersion(_) => write!(fmt, "PostgreSQL version not known"),
+            ClusterError::DatabaseError(_) => write!(fmt, "database error"),
+            ClusterError::Other(_) => write!(fmt, "external command failed"),
+        }
     }
 }
 
 impl error::Error for ClusterError {
-    fn description(&self) -> &str {
-        match *self {
-            ClusterError::PathEncodingError => "path is not UTF-8",
-            ClusterError::IoError(_) => "input/output error",
-            ClusterError::UnixError(_) => "UNIX error",
-            ClusterError::UnsupportedVersion(_) => "PostgreSQL version not supported",
-            ClusterError::UnknownVersion(_) => "PostgreSQL version not known",
-            ClusterError::DatabaseError(_) => "database error",
-            ClusterError::Other(_) => "external command failed",
-        }
-    }
-
     fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             ClusterError::PathEncodingError => None,

@@ -18,18 +18,14 @@ pub enum VersionParseError {
 
 impl fmt::Display for VersionParseError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", (self as &dyn error::Error).description())
+        match *self {
+            VersionParseError::Invalid => write!(fmt, "version was badly formed"),
+            VersionParseError::Missing => write!(fmt, "version information not found"),
+        }
     }
 }
 
 impl error::Error for VersionParseError {
-    fn description(&self) -> &str {
-        match *self {
-            VersionParseError::Invalid => "version was badly formed",
-            VersionParseError::Missing => "version information not found",
-        }
-    }
-
     fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
@@ -69,19 +65,15 @@ pub enum VersionError {
 
 impl fmt::Display for VersionError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", (self as &dyn error::Error).description())
+        match *self {
+            VersionError::IoError(_) => write!(fmt, "input/output error"),
+            VersionError::Invalid(_) => write!(fmt, "version was badly formed"),
+            VersionError::Missing => write!(fmt, "version information not found"),
+        }
     }
 }
 
 impl error::Error for VersionError {
-    fn description(&self) -> &str {
-        match *self {
-            VersionError::IoError(_) => "input/output error",
-            VersionError::Invalid(_) => "version was badly formed",
-            VersionError::Missing => "version information not found",
-        }
-    }
-
     fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             VersionError::IoError(ref error) => Some(error),
