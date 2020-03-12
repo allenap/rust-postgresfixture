@@ -1,4 +1,16 @@
+jobs:
+  include:
+    - name: Ubuntu Xenial
+      os: linux
+      dist: xenial
+    - name: Ubuntu Bionic
+      os: linux
+      dist: bionic
+
 language: rust
+
 before_install:
   - sudo apt-get -y install postgresql
+
+before_script:
   - export PATH="$(printf '%s:' /usr/lib/postgresql/*/bin)$PATH"
