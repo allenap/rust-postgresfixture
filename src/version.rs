@@ -21,15 +21,15 @@ impl fmt::Display for Version {
 
 #[derive(Debug, PartialEq)]
 pub enum VersionParseError {
-    Invalid,
+    BadlyFormed,
     Missing,
 }
 
 impl fmt::Display for VersionParseError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            VersionParseError::Invalid => write!(fmt, "version was badly formed"),
-            VersionParseError::Missing => write!(fmt, "version information not found"),
+            VersionParseError::BadlyFormed => write!(fmt, "badly formed"),
+            VersionParseError::Missing => write!(fmt, "not found"),
         }
     }
 }
@@ -42,7 +42,7 @@ impl error::Error for VersionParseError {
 
 impl From<num::ParseIntError> for VersionParseError {
     fn from(_error: num::ParseIntError) -> VersionParseError {
-        VersionParseError::Invalid
+        VersionParseError::BadlyFormed
     }
 }
 
@@ -69,15 +69,13 @@ impl FromStr for Version {
 pub enum VersionError {
     IoError(io::Error),
     Invalid(VersionParseError),
-    Missing,
 }
 
 impl fmt::Display for VersionError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            VersionError::IoError(_) => write!(fmt, "input/output error"),
-            VersionError::Invalid(_) => write!(fmt, "version was badly formed"),
-            VersionError::Missing => write!(fmt, "version information not found"),
+            VersionError::IoError(ref e) => write!(fmt, "input/output error: {}", e),
+            VersionError::Invalid(ref e) => write!(fmt, "version was invalid: {}", e),
         }
     }
 }
@@ -87,7 +85,6 @@ impl error::Error for VersionError {
         match *self {
             VersionError::IoError(ref error) => Some(error),
             VersionError::Invalid(ref error) => Some(error),
-            VersionError::Missing => None,
         }
     }
 }
@@ -121,7 +118,7 @@ mod tests {
     #[test]
     fn parse_returns_error_when_version_is_invalid() {
         // 4294967295 is (2^32 + 1), so won't fit in a u32.
-        assert_eq!(Err(Invalid), "4294967296.0".parse::<Version>());
+        assert_eq!(Err(BadlyFormed), "4294967296.0".parse::<Version>());
     }
 
     #[test]

@@ -35,10 +35,9 @@ impl Runtime {
         // Execute pg_ctl and extract version.
         let version_output = self.execute("pg_ctl").arg("--version").output()?;
         let version_string = String::from_utf8_lossy(&version_output.stdout);
-        match version_string.split_whitespace().last() {
-            Some(version) => Ok(version.parse()?),
-            None => Err(VersionError::Missing),
-        }
+        // The version parser can deal with leading garbage, i.e. it can parse
+        // "pg_ctl (PostgreSQL) 12.2" and get 12.2 out of it.
+        Ok(version_string.parse()?)
     }
 
     pub fn execute(&self, program: &str) -> Command {
