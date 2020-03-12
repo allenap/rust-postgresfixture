@@ -11,4 +11,6 @@ language: rust
 
 before_install:
   - sudo apt-get -y install postgresql
+
+before_script:
   - export PATH="$(printf '%s:' /usr/lib/postgresql/*/bin)$PATH"
