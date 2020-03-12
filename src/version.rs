@@ -10,26 +10,31 @@ pub struct Version {
     pub patch: Option<u32>,
 }
 
+impl fmt::Display for Version {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self.patch {
+            Some(patch) => write!(fmt, "{}.{}.{}", self.major, self.minor, patch),
+            None => write!(fmt, "{}.{}", self.major, self.minor),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum VersionParseError {
-    Invalid,
+    BadlyFormed,
     Missing,
 }
 
 impl fmt::Display for VersionParseError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", (self as &dyn error::Error).description())
+        match *self {
+            VersionParseError::BadlyFormed => write!(fmt, "badly formed"),
+            VersionParseError::Missing => write!(fmt, "not found"),
+        }
     }
 }
 
 impl error::Error for VersionParseError {
-    fn description(&self) -> &str {
-        match *self {
-            VersionParseError::Invalid => "version was badly formed",
-            VersionParseError::Missing => "version information not found",
-        }
-    }
-
     fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
@@ -37,7 +42,7 @@ impl error::Error for VersionParseError {
 
 impl From<num::ParseIntError> for VersionParseError {
     fn from(_error: num::ParseIntError) -> VersionParseError {
-        VersionParseError::Invalid
+        VersionParseError::BadlyFormed
     }
 }
 
@@ -64,29 +69,22 @@ impl FromStr for Version {
 pub enum VersionError {
     IoError(io::Error),
     Invalid(VersionParseError),
-    Missing,
 }
 
 impl fmt::Display for VersionError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", (self as &dyn error::Error).description())
+        match *self {
+            VersionError::IoError(ref e) => write!(fmt, "input/output error: {}", e),
+            VersionError::Invalid(ref e) => write!(fmt, "version was invalid: {}", e),
+        }
     }
 }
 
 impl error::Error for VersionError {
-    fn description(&self) -> &str {
-        match *self {
-            VersionError::IoError(_) => "input/output error",
-            VersionError::Invalid(_) => "version was badly formed",
-            VersionError::Missing => "version information not found",
-        }
-    }
-
     fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             VersionError::IoError(ref error) => Some(error),
             VersionError::Invalid(ref error) => Some(error),
-            VersionError::Missing => None,
         }
     }
 }
@@ -120,12 +118,22 @@ mod tests {
     #[test]
     fn parse_returns_error_when_version_is_invalid() {
         // 4294967295 is (2^32 + 1), so won't fit in a u32.
-        assert_eq!(Err(Invalid), "4294967296.0".parse::<Version>());
+        assert_eq!(Err(BadlyFormed), "4294967296.0".parse::<Version>());
     }
 
     #[test]
     fn parse_returns_error_when_version_not_found() {
         assert_eq!(Err(Missing), "foo".parse::<Version>());
+    }
+
+    #[test]
+    fn displays_version_below_10() {
+        assert_eq!("9.6.17", format!("{}", vp(9, 6, 17)));
+    }
+
+    #[test]
+    fn displays_version_above_10() {
+        assert_eq!("12.2", format!("{}", v(12, 2)));
     }
 
     fn vp(major: u32, minor: u32, patch: u32) -> Version {
