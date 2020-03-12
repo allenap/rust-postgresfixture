@@ -10,6 +10,15 @@ pub struct Version {
     pub patch: Option<u32>,
 }
 
+impl fmt::Display for Version {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self.patch {
+            Some(patch) => write!(fmt, "{}.{}.{}", self.major, self.minor, patch),
+            None => write!(fmt, "{}.{}", self.major, self.minor),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum VersionParseError {
     Invalid,
@@ -118,6 +127,16 @@ mod tests {
     #[test]
     fn parse_returns_error_when_version_not_found() {
         assert_eq!(Err(Missing), "foo".parse::<Version>());
+    }
+
+    #[test]
+    fn displays_version_below_10() {
+        assert_eq!("9.6.17", format!("{}", vp(9, 6, 17)));
+    }
+
+    #[test]
+    fn displays_version_above_10() {
+        assert_eq!("12.2", format!("{}", v(12, 2)));
     }
 
     fn vp(major: u32, minor: u32, patch: u32) -> Version {
