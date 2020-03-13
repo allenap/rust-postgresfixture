@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate clap;
-extern crate postgresfixture;
 
 use std::env;
 use std::path::PathBuf;

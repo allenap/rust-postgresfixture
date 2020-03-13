@@ -1,8 +1,3 @@
-extern crate nix;
-extern crate postgres;
-extern crate regex;
-extern crate shell_escape;
-
 mod cluster;
 mod lock;
 mod runtime;

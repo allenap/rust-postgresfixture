@@ -2,9 +2,9 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub use version::{Version, VersionError};
+pub use crate::version::{Version, VersionError};
 
-use util;
+use crate::util;
 
 pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
@@ -62,8 +62,6 @@ impl Runtime {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempdir;
-
     use super::Runtime;
 
     use std::env;

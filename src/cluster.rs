@@ -2,10 +2,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 use std::{env, error, fmt, fs, io};
 
-use lock::LockDo;
 use postgres;
-use runtime;
 use shell_escape::escape;
+
+use crate::lock::LockDo;
+use crate::runtime;
 
 #[derive(Debug)]
 pub enum ClusterError {
@@ -420,10 +421,8 @@ impl Cluster {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempdir;
-
     use super::Cluster;
-    use runtime::Runtime;
+    use crate::runtime::Runtime;
 
     use std::collections::HashSet;
     use std::fs::File;

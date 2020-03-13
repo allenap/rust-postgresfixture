@@ -21,8 +21,6 @@ pub fn prepend_to_path(dir: &Path, path: Option<OsString>) -> PrependedPath {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempdir;
-
     use std::env;
 
     #[test]

@@ -71,8 +71,6 @@ impl<'a> Drop for FileLockGuard<'a> {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempdir;
-
     use super::LockDo;
 
     use std::fs::OpenOptions;

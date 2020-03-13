@@ -1,8 +1,8 @@
 [package]
 name = "postgresfixture"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Gavin Panella <gavinpanella@gmail.com>"]
-edition = "2015"
+edition = "2018"
 description = "Easily create and manage PostgreSQL clusters on demand for testing and development."
 readme = "README.md"
 repository = "https://github.com/allenap/rust-postgresfixture"
