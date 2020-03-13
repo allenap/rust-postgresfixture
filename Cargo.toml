@@ -1,6 +1,6 @@
 [package]
 name = "postgresfixture"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Gavin Panella <gavinpanella@gmail.com>"]
 edition = "2015"
 description = "Easily create and manage PostgreSQL clusters on demand for testing and development."
