@@ -12,17 +12,15 @@ efforts to [make MAAS's test suites faster][maas-faster-tests].
 [postgresfixture]: https://pypi.python.org/pypi/postgresfixture
 [maas-faster-tests]: https://allenap.me/post/the-way-to-run-tests-quickly-in-maas/
 
-This started out as a straightforward port, but it's already starting to deviate
-from  the design of its Python counterpart. I'm not sure exactly where it will
-end up yet, but it will at least support the same use cases, albeit in its own
-way.
+This started out as a straightforward port, but it's starting to deviate from
+the design of its Python counterpart. I'm not sure exactly where it will end up
+yet, but it will at least support the same use cases, albeit in its own way.
 
 
 ## Getting Started
 
-This code is **pre-alpha** so it's not particularly useful yet. It has not been
-published to [crates.io](https://crates.io/). For now, the only thing to do is
-to hack the source:
+This code is **alpha** and is some way from feature parity with its Python
+ancestor. If you feel the urge to hack on this code, here's how to get started:
 
   * [Install cargo](https://crates.io/install),
   * Clone this repository,

@@ -2,6 +2,15 @@
 name = "postgresfixture"
 version = "0.2.0"
 authors = ["Gavin Panella <gavinpanella@gmail.com>"]
+edition = "2018"
+description = "Easily create and manage PostgreSQL clusters on demand for testing and development."
+repository = "https://github.com/allenap/rust-postgresfixture"
+license = "Apache-2.0"
+keywords = ["database", "postgres", "postgresql"]
+categories = ["command-line-utilities", "database", "development-tools", "development-tools::testing"]
+
+[badges]
+travis-ci = { repository = "allenap/rust-postgresfixture", branch = "master" }
 
 [lib]
 name = "postgresfixture"
