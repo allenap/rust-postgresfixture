@@ -2,7 +2,7 @@
 authors = ["Gavin Panella <gavinpanella@gmail.com>"]
 categories = ["command-line-utilities", "database", "development-tools", "development-tools::testing"]
 description = "Easily create and manage PostgreSQL clusters on demand for testing and development."
-edition = "2018"
+edition = "2021"
 keywords = ["database", "postgres", "postgresql"]
 license = "Apache-2.0"
 name = "postgresfixture"
