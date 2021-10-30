@@ -24,8 +24,9 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - name: Install PostgreSQL
-        run: sudo apt-get -y install postgresql
+      - name: Set PATH for pg_ctl
+        run: |
+          printf '%s\n' /usr/lib/postgresql/*/bin | sort -Vr | tee -a "$GITHUB_PATH"
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
