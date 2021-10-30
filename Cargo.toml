@@ -1,33 +1,33 @@
 [package]
-name = "postgresfixture"
-version = "0.2.3"
 authors = ["Gavin Panella <gavinpanella@gmail.com>"]
-edition = "2018"
+categories = ["command-line-utilities", "database", "development-tools", "development-tools::testing"]
 description = "Easily create and manage PostgreSQL clusters on demand for testing and development."
+edition = "2018"
+keywords = ["database", "postgres", "postgresql"]
+license = "Apache-2.0"
+name = "postgresfixture"
 readme = "README.md"
 repository = "https://github.com/allenap/rust-postgresfixture"
-license = "Apache-2.0"
-keywords = ["database", "postgres", "postgresql"]
-categories = ["command-line-utilities", "database", "development-tools", "development-tools::testing"]
+version = "0.2.3"
 
 [badges]
-travis-ci = { repository = "allenap/rust-postgresfixture", branch = "master" }
+travis-ci = {repository = "allenap/rust-postgresfixture", branch = "master"}
 
 [lib]
 name = "postgresfixture"
 path = "src/lib.rs"
 
 [[bin]]
+doc = false
 name = "postgresfixture"
 path = "src/main.rs"
-doc = false
 
 [dependencies]
-clap = "^2.24.2"
-nix = "^0.17.0"
-postgres = "^0.17.2"
-regex = "^1.3.4"
-shell-escape = "^0.1.3"
+clap = "^2.33.3"
+nix = "^0.23.0"
+postgres = "^0.19.2"
+regex = "^1.5.4"
+shell-escape = "^0.1.5"
 
 [dev-dependencies]
-tempdir = "^0.3"
+tempdir = "^0.3.7"
