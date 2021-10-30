@@ -35,7 +35,7 @@ impl LockDo for File {
     where
         F: FnOnce() -> T,
     {
-        let guard = FileLockGuard(&self);
+        let guard = FileLockGuard(self);
         flock(self.as_raw_fd(), FlockArg::LockExclusive)?;
         let result = action();
         drop(guard); // Will happen implicitly anyway on exit from this function.
@@ -51,7 +51,7 @@ impl LockDo for File {
     where
         F: FnOnce() -> T,
     {
-        let guard = FileLockGuard(&self);
+        let guard = FileLockGuard(self);
         flock(self.as_raw_fd(), FlockArg::LockShared)?;
         let result = action();
         drop(guard); // Will happen implicitly anyway on exit from this function.

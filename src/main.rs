@@ -79,9 +79,9 @@ fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
     {
         cluster
             .createdb(database_name)
-            .expect(&format!("could not create database {:?}", database_name));
+            .expect("could not create database");
     }
-    cluster.shell(&database_name).expect("shell failed");
+    cluster.shell(database_name).expect("shell failed");
     cluster.stop().expect("could not stop cluster");
     0
 }
