@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 use std::{env, error, fmt, fs, io};
 
-use postgres;
 use shell_escape::escape;
 
 use crate::lock::LockDo;
@@ -124,12 +123,8 @@ impl Cluster {
         let datadir = datadir.as_ref();
         Self {
             datadir: datadir.to_path_buf(),
-            lockfile: datadir
-                .parent()
-                .unwrap_or(datadir)
-                .join(".cluster.lock")
-                .to_path_buf(),
-            runtime: runtime,
+            lockfile: datadir.parent().unwrap_or(datadir).join(".cluster.lock"),
+            runtime,
         }
     }
 
@@ -339,7 +334,7 @@ impl Cluster {
 
     // Connect to this cluster.
     pub fn connect(&self, database: &str) -> Result<postgres::Client, ClusterError> {
-        let user = &env::var("USER").unwrap_or("USER-not-set".to_string());
+        let user = &env::var("USER").unwrap_or_else(|_| "USER-not-set".to_string());
         let host = self.datadir.to_string_lossy(); // postgres crate API limitation.
         let client = postgres::Client::configure()
             .user(user)

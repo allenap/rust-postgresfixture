@@ -49,7 +49,7 @@ impl Runtime {
                 // TODO: Print warning if this fails.
                 command.env(
                     "PATH",
-                    util::prepend_to_path(&bindir, env::var_os("PATH")).unwrap(),
+                    util::prepend_to_path(bindir, env::var_os("PATH")).unwrap(),
                 );
             }
             None => {
