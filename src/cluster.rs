@@ -425,17 +425,19 @@ mod tests {
 
     #[test]
     fn cluster_new() {
-        let runtime = Runtime { bindir: None };
-        let cluster = Cluster::new("some/path", runtime);
-        assert_eq!(Path::new("some/path"), cluster.datadir);
-        assert_eq!(false, cluster.running().unwrap());
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new("some/path", runtime);
+            assert_eq!(Path::new("some/path"), cluster.datadir);
+            assert_eq!(false, cluster.running().unwrap());
+        }
     }
 
     #[test]
     fn cluster_does_not_exist() {
-        let runtime = Runtime { bindir: None };
-        let cluster = Cluster::new("some/path", runtime);
-        assert!(!cluster.exists());
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new("some/path", runtime);
+            assert!(!cluster.exists());
+        }
     }
 
     #[test]
@@ -443,101 +445,110 @@ mod tests {
         let data_dir = tempdir::TempDir::new("data").unwrap();
         let version_file = data_dir.path().join("PG_VERSION");
         File::create(&version_file).unwrap();
-        let runtime = Runtime { bindir: None };
-        let cluster = Cluster::new(&data_dir, runtime);
-        assert!(cluster.exists());
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new(&data_dir, runtime);
+            assert!(cluster.exists());
+        }
     }
 
     #[test]
     fn cluster_has_pid_file() {
         let data_dir = PathBuf::from("/some/where");
-        let runtime = Runtime { bindir: None };
-        let cluster = Cluster::new(&data_dir, runtime);
-        assert_eq!(
-            PathBuf::from("/some/where/postmaster.pid"),
-            cluster.pidfile()
-        );
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new(&data_dir, runtime);
+            assert_eq!(
+                PathBuf::from("/some/where/postmaster.pid"),
+                cluster.pidfile()
+            );
+        }
     }
 
     #[test]
     fn cluster_has_log_file() {
         let data_dir = PathBuf::from("/some/where");
-        let runtime = Runtime { bindir: None };
-        let cluster = Cluster::new(&data_dir, runtime);
-        assert_eq!(PathBuf::from("/some/where/backend.log"), cluster.logfile());
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new(&data_dir, runtime);
+            assert_eq!(PathBuf::from("/some/where/backend.log"), cluster.logfile());
+        }
     }
 
     #[test]
     fn cluster_create_creates_cluster() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let runtime = Runtime::default();
-        let cluster = Cluster::new(&data_dir, runtime);
-        assert!(!cluster.exists());
-        assert!(cluster.create().unwrap());
-        assert!(cluster.exists());
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new(&data_dir, runtime);
+            assert!(!cluster.exists());
+            assert!(cluster.create().unwrap());
+            assert!(cluster.exists());
+        }
     }
 
     #[test]
     fn cluster_create_does_nothing_when_it_already_exists() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let runtime = Runtime::default();
-        let cluster = Cluster::new(&data_dir, runtime);
-        assert!(!cluster.exists());
-        assert!(cluster.create().unwrap());
-        assert!(cluster.exists());
-        assert!(!cluster.create().unwrap());
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new(&data_dir, runtime);
+            assert!(!cluster.exists());
+            assert!(cluster.create().unwrap());
+            assert!(cluster.exists());
+            assert!(!cluster.create().unwrap());
+        }
     }
 
     #[test]
     fn cluster_start_stop_starts_and_stops_cluster() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let runtime = Runtime::default();
-        let cluster = Cluster::new(&data_dir, runtime);
-        cluster.create().unwrap();
-        assert!(!cluster.running().unwrap());
-        cluster.start().unwrap();
-        assert!(cluster.running().unwrap());
-        cluster.stop().unwrap();
-        assert!(!cluster.running().unwrap());
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new(&data_dir, runtime);
+            cluster.create().unwrap();
+            assert!(!cluster.running().unwrap());
+            cluster.start().unwrap();
+            assert!(cluster.running().unwrap());
+            cluster.stop().unwrap();
+            assert!(!cluster.running().unwrap());
+        }
     }
 
     #[test]
     fn cluster_destroy_stops_and_removes_cluster() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let runtime = Runtime::default();
-        let cluster = Cluster::new(&data_dir, runtime);
-        cluster.create().unwrap();
-        cluster.start().unwrap();
-        assert!(cluster.exists());
-        cluster.destroy().unwrap();
-        assert!(!cluster.exists());
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new(&data_dir, runtime);
+            cluster.create().unwrap();
+            cluster.start().unwrap();
+            assert!(cluster.exists());
+            cluster.destroy().unwrap();
+            assert!(!cluster.exists());
+        }
     }
 
     #[test]
     fn cluster_connect_connects() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let runtime = Runtime::default();
-        let cluster = Cluster::new(&data_dir, runtime);
-        cluster.start().unwrap();
-        cluster.connect("template1").unwrap();
-        cluster.destroy().unwrap();
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new(&data_dir, runtime);
+            cluster.start().unwrap();
+            cluster.connect("template1").unwrap();
+            cluster.destroy().unwrap();
+        }
     }
 
     #[test]
     fn cluster_databases_returns_vec_of_database_names() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
-        let runtime = Runtime::default();
-        let cluster = Cluster::new(&data_dir, runtime);
-        cluster.start().unwrap();
+        for runtime in Runtime::find_on_path() {
+            let cluster = Cluster::new(&data_dir, runtime);
+            cluster.start().unwrap();
 
-        let expected: HashSet<String> = ["postgres", "template0", "template1"]
-            .iter()
-            .cloned()
-            .map(|s| s.to_string())
-            .collect();
-        let observed: HashSet<String> = cluster.databases().unwrap().iter().cloned().collect();
-        assert_eq!(expected, observed);
+            let expected: HashSet<String> = ["postgres", "template0", "template1"]
+                .iter()
+                .cloned()
+                .map(|s| s.to_string())
+                .collect();
+            let observed: HashSet<String> = cluster.databases().unwrap().iter().cloned().collect();
+            assert_eq!(expected, observed);
 
-        cluster.destroy().unwrap();
+            cluster.destroy().unwrap();
+        }
     }
 }
