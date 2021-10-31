@@ -108,8 +108,6 @@ impl Cluster {
     /// Tries to distinguish carefully between "definitely running", "definitely not running", and
     /// "don't know". The latter results in `ClusterError`.
     pub fn running(&self) -> Result<bool, ClusterError> {
-        // TODO: Test this stuff. It's untested because I want the means to create and destroy
-        // clusters before writing the tests for this.
         let output = self.ctl().arg("status").output()?;
         let code = match output.status.code() {
             // Killed by signal; return early.
