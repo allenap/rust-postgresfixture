@@ -82,42 +82,6 @@ pub struct Cluster {
     runtime: runtime::Runtime,
 }
 
-/*
-
-Proposed new locking scheme:
-----------------------------
-
-- If `DATA` directory does not exist, create it.
-  - This may fail because a concurrent process has created it. Continue.
-- Lock file `DATA/.postgresfixture.lock`
-  - exclusively when creating, starting, stopping, or destroying the cluster.
-  - shared when using the cluster.
-  - Is it possible to downgrade from exclusive flock to shared? Yes.
-    - From _flock(2)_ on Linux:
-      A process may hold only one type of lock (shared or exclusive) on a file.  Subsequent flock()
-      calls on an already locked file will convert an existing lock to the new lock mode.
-    - However, from _flock(2)_ on MacOSX:
-        A shared lock may be upgraded to an exclusive lock, and vice versa, simply by specifying
-        the appropriate lock type; this results in the previous lock being released and the new
-        lock applied (**possibly after other processes have gained and released the lock**).
-- When destroying cluster, move `DATA` to `DATA.XXXXXX` (where `XXXXXX` is random) *after*
-  stopping the cluster but *before* deleting all files.
-  - What happens when process A is destroying a cluster and process B comes to, say, also destroy
-    the cluster? The following would be bad:
-    - B blocks, waiting for an exclusive lock on `DATA/.postgresfixture.lock`.
-    - A moves `DATA` to `DATA.XXXXXX`.
-    - A destroys `DATA.XXXXXX` and releases all locks.
-    - Meanwhile, process C creates a new cluster in `DATA` and uses it.
-    - B still has a file-descriptor for lock file. That lock has been deleted from the filesystem,
-      but B can nevertheless now exclusively lock it.
-    - B then goes about destroying `DATA` because it thinks it has an exclusive lock.
-    - C gets confused, angry.
-    - FIX: Ensure that the lock's `File` refers to the same file as a newly-opened `File` for the
-      lock. Use the [same-file](https://crates.io/crates/same-file) crate for this:
-      `same_file::Handle` instances are equal when they refer to the same underlying file.
-
-*/
-
 impl Cluster {
     pub fn new<P: AsRef<Path>>(datadir: P, runtime: runtime::Runtime) -> Self {
         let datadir = datadir.as_ref();
