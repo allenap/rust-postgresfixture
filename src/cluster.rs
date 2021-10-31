@@ -82,42 +82,6 @@ pub struct Cluster {
     runtime: runtime::Runtime,
 }
 
-/*
-
-Proposed new locking scheme:
-----------------------------
-
-- If `DATA` directory does not exist, create it.
-  - This may fail because a concurrent process has created it. Continue.
-- Lock file `DATA/.postgresfixture.lock`
-  - exclusively when creating, starting, stopping, or destroying the cluster.
-  - shared when using the cluster.
-  - Is it possible to downgrade from exclusive flock to shared? Yes.
-    - From _flock(2)_ on Linux:
-      A process may hold only one type of lock (shared or exclusive) on a file.  Subsequent flock()
-      calls on an already locked file will convert an existing lock to the new lock mode.
-    - However, from _flock(2)_ on MacOSX:
-        A shared lock may be upgraded to an exclusive lock, and vice versa, simply by specifying
-        the appropriate lock type; this results in the previous lock being released and the new
-        lock applied (**possibly after other processes have gained and released the lock**).
-- When destroying cluster, move `DATA` to `DATA.XXXXXX` (where `XXXXXX` is random) *after*
-  stopping the cluster but *before* deleting all files.
-  - What happens when process A is destroying a cluster and process B comes to, say, also destroy
-    the cluster? The following would be bad:
-    - B blocks, waiting for an exclusive lock on `DATA/.postgresfixture.lock`.
-    - A moves `DATA` to `DATA.XXXXXX`.
-    - A destroys `DATA.XXXXXX` and releases all locks.
-    - Meanwhile, process C creates a new cluster in `DATA` and uses it.
-    - B still has a file-descriptor for lock file. That lock has been deleted from the filesystem,
-      but B can nevertheless now exclusively lock it.
-    - B then goes about destroying `DATA` because it thinks it has an exclusive lock.
-    - C gets confused, angry.
-    - FIX: Ensure that the lock's `File` refers to the same file as a newly-opened `File` for the
-      lock. Use the [same-file](https://crates.io/crates/same-file) crate for this:
-      `same_file::Handle` instances are equal when they refer to the same underlying file.
-
-*/
-
 impl Cluster {
     pub fn new<P: AsRef<Path>>(datadir: P, runtime: runtime::Runtime) -> Self {
         let datadir = datadir.as_ref();
@@ -144,8 +108,6 @@ impl Cluster {
     /// Tries to distinguish carefully between "definitely running", "definitely not running", and
     /// "don't know". The latter results in `ClusterError`.
     pub fn running(&self) -> Result<bool, ClusterError> {
-        // TODO: Test this stuff. It's untested because I want the means to create and destroy
-        // clusters before writing the tests for this.
         let output = self.ctl().arg("status").output()?;
         let code = match output.status.code() {
             // Killed by signal; return early.
@@ -294,16 +256,22 @@ impl Cluster {
         }
         // Ensure that the cluster has been created.
         self._create()?;
-        // This next thing is kind of a Rust wart, kind of a wart in the `shell-escape` crate. UNIX
-        // paths are all bytes and the only thing they're not allowed to contain is, AFAIK, the
-        // null byte. The encoding is defined by the locale variables, again AFAIK, but there's an
-        // implicit assumption in Rust that `OsString` and its kin are essentially UTF-8. The
-        // `shell-escape` crate only understands `&str` so we have to convert a platform-specific
-        // path string to a Rust string in order to use it. Cargo, another user of `shell-escape`,
-        // uses `to_string_lossy` here, but I'm choosing to be strict and reject any platform path
-        // that's not also valid UTF-8. The question now arises: why do we need `shell-escape`? One
-        // of the arguments we will pass to `pg_ctl` will be used as the argument _list_ when it
-        // invokes `postgres`. Sucks, but there it is.
+        // This next thing is a wart of the `shell-escape` crate. UNIX paths are
+        // bytes and the only thing they're not allowed to contain is, as far as
+        // I know, the null byte. The encoding is defined by the locale.
+        //
+        // Now, the `shell-escape` crate only understands `&str` so we have to
+        // convert a platform-specific path string to a UTF-8 string before
+        // passing it to `shell-escape`.
+        //
+        // Cargo, a notable codebase that uses `shell-escape`, sidesteps this
+        // limitation: it only uses `shell-escape` with strings already assumed
+        // to be UTF-8. I'm choosing to be strict and reject any platform path
+        // that's not also valid UTF-8.
+        //
+        // Why do we need `shell-escape`? One of the arguments we will pass to
+        // `pg_ctl` will be used as the argument _list_ when it invokes
+        // `postgres`. Sucks, but there it is.
         let datadir = self
             .datadir
             .as_path()

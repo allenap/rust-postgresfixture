@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+# Debian/Ubuntu.
+if [[ -d /usr/lib/postgresql ]]
+then
+    export PATH="$(printf '%s:' /usr/lib/postgresql/*/bin):$PATH"
+fi
+
+# Homebrew.
+if [[ -d /usr/local/Cellar ]]
+then
+    # The most recent version of PostgreSQL – typically installed by the
+    # `postgresql` formula – links `pg_ctl` et al. into `/usr/local/bin`, and
+    # has a Cellar path of `/usr/local/Cellar/postgresql` (note: no @version).
+    # We specifically do not match it here otherwise it'll be discovered twice
+    # and tests will take longer.
+    export PATH="$(printf '%s:' /usr/local/Cellar/postgresql@*/*/bin):$PATH"
+fi
+
+exec cargo test "$@"
