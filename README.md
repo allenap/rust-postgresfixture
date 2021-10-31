@@ -26,7 +26,7 @@ will probably have added to your `PATH`.
 
 ```shellsession
 $ postgresfixture --help
-rust-postgresfixture 0.2.3
+rust-postgresfixture 0.2.4
 Gavin Panella <gavinpanella@gmail.com>
 Work with ephemeral PostgreSQL clusters.
 
