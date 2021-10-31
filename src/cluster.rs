@@ -258,16 +258,22 @@ impl Cluster {
         }
         // Ensure that the cluster has been created.
         self._create()?;
-        // This next thing is kind of a Rust wart, kind of a wart in the `shell-escape` crate. UNIX
-        // paths are all bytes and the only thing they're not allowed to contain is, AFAIK, the
-        // null byte. The encoding is defined by the locale variables, again AFAIK, but there's an
-        // implicit assumption in Rust that `OsString` and its kin are essentially UTF-8. The
-        // `shell-escape` crate only understands `&str` so we have to convert a platform-specific
-        // path string to a Rust string in order to use it. Cargo, another user of `shell-escape`,
-        // uses `to_string_lossy` here, but I'm choosing to be strict and reject any platform path
-        // that's not also valid UTF-8. The question now arises: why do we need `shell-escape`? One
-        // of the arguments we will pass to `pg_ctl` will be used as the argument _list_ when it
-        // invokes `postgres`. Sucks, but there it is.
+        // This next thing is a wart of the `shell-escape` crate. UNIX paths are
+        // bytes and the only thing they're not allowed to contain is, as far as
+        // I know, the null byte. The encoding is defined by the locale.
+        //
+        // Now, the `shell-escape` crate only understands `&str` so we have to
+        // convert a platform-specific path string to a UTF-8 string before
+        // passing it to `shell-escape`.
+        //
+        // Cargo, a notable codebase that uses `shell-escape`, sidesteps this
+        // limitation: it only uses `shell-escape` with strings already assumed
+        // to be UTF-8. I'm choosing to be strict and reject any platform path
+        // that's not also valid UTF-8.
+        //
+        // Why do we need `shell-escape`? One of the arguments we will pass to
+        // `pg_ctl` will be used as the argument _list_ when it invokes
+        // `postgres`. Sucks, but there it is.
         let datadir = self
             .datadir
             .as_path()
