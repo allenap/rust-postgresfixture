@@ -24,7 +24,19 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - name: Set PATH for pg_ctl
+      - name: Set up PostgreSQL APT repository
+        run: |
+          sudo apt-get install -y postgresql-common
+          sudo sh /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+      - name: Install various PostgreSQL versions
+        run: |
+          # See https://www.postgresql.org/support/versioning/ for official
+          # support information, and https://apt.postgresql.org/pub/repos/apt/
+          # for all available versions. At present only 9.6, 10, 11, 12, 13, and
+          # 14 are officially supported upstream, but there is still logic in
+          # rust-postgresfixture that works with versions as old as 9.0.
+          sudo apt-get install -y postgresql-{9.{0,1,2,3,4,5,6},10,11,12,13,14}
+      - name: Set PATH for all PostgreSQL runtimes
         run: |
           printf '%s\n' /usr/lib/postgresql/*/bin | sort -Vr | tee -a "$GITHUB_PATH"
       - uses: actions/checkout@v2

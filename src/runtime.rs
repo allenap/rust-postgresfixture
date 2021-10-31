@@ -1,4 +1,5 @@
 use std::env;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -6,6 +7,7 @@ pub use crate::version::{Version, VersionError};
 
 use crate::util;
 
+#[derive(Debug)]
 pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.
@@ -21,6 +23,27 @@ impl Default for Runtime {
 }
 
 impl Runtime {
+    /// Find runtimes on the given path.
+    ///
+    /// Parses input according to platform conventions for the `PATH`
+    /// environment variable. See [`env::split_paths`] for details.
+    pub fn find<T: AsRef<OsStr> + ?Sized>(path: &T) -> Vec<Self> {
+        env::split_paths(path)
+            .filter(|bindir| bindir.join("pg_ctl").exists())
+            .map(|bindir| Self {
+                bindir: Some(bindir),
+            })
+            .collect()
+    }
+
+    /// Find runtimes on `PATH` (environment variable).
+    pub fn find_on_path() -> Vec<Self> {
+        match env::var_os("PATH") {
+            Some(path) => Self::find(&path),
+            None => vec![],
+        }
+    }
+
     pub fn new<P: AsRef<Path>>(bindir: P) -> Self {
         Self {
             bindir: Some(bindir.as_ref().to_path_buf()),
@@ -71,6 +94,19 @@ mod tests {
         env::split_paths(&env::var_os("PATH").expect("PATH not set"))
             .find(|path| path.join("pg_ctl").exists())
             .expect("pg_ctl not on PATH")
+    }
+
+    #[test]
+    fn runtime_find() {
+        let path = env::var_os("PATH").expect("PATH not set");
+        let pgs = Runtime::find(&path);
+        assert_ne!(0, pgs.len());
+    }
+
+    #[test]
+    fn runtime_find_on_path() {
+        let pgs = Runtime::find_on_path();
+        assert_ne!(0, pgs.len());
     }
 
     #[test]
