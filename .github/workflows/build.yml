@@ -26,6 +26,7 @@ jobs:
     steps:
       - name: Set up PostgreSQL APT repository
         run: |
+          # From https://wiki.postgresql.org/wiki/Apt
           sudo apt-get install -y postgresql-common
           sudo sh /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
       - name: Install various PostgreSQL versions
