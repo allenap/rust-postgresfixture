@@ -138,16 +138,16 @@ mod tests {
 
     fn vp(major: u32, minor: u32, patch: u32) -> Version {
         Version {
-            major: major,
-            minor: minor,
+            major,
+            minor,
             patch: Some(patch),
         }
     }
 
     fn v(major: u32, minor: u32) -> Version {
         Version {
-            major: major,
-            minor: minor,
+            major,
+            minor,
             patch: None,
         }
     }

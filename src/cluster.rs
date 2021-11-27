@@ -397,7 +397,7 @@ mod tests {
             println!("{:?}", runtime);
             let cluster = Cluster::new("some/path", runtime);
             assert_eq!(Path::new("some/path"), cluster.datadir);
-            assert_eq!(false, cluster.running().unwrap());
+            assert!(cluster.running().unwrap());
         }
     }
 
