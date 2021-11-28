@@ -5,6 +5,8 @@ use std::env;
 use std::path::PathBuf;
 use std::process::exit;
 
+use postgresfixture::ClusterError;
+
 fn main() {
     exit(match parse_args().subcommand() {
         ("shell", Some(args)) => {
@@ -71,7 +73,10 @@ fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
         },
         postgresfixture::Runtime::default(),
     );
-    cluster.start().expect("could not start cluster");
+    match cluster.start() {
+        Err(ClusterError::InUse) => false,
+        other => other.expect("could not start cluster"),
+    };
     if !cluster
         .databases()
         .expect("could not list databases")
@@ -82,6 +87,9 @@ fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
             .expect("could not create database");
     }
     cluster.shell(database_name).expect("shell failed");
-    cluster.stop().expect("could not stop cluster");
+    match cluster.stop() {
+        Err(ClusterError::InUse) => false,
+        other => other.expect("could not stop cluster"),
+    };
     0
 }

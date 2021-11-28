@@ -4,7 +4,7 @@ use std::{env, error, fmt, fs, io};
 
 use shell_escape::escape;
 
-use crate::lock::LockDo;
+use crate::lock::FileLock;
 use crate::runtime;
 
 #[derive(Debug)]
@@ -15,6 +15,7 @@ pub enum ClusterError {
     UnsupportedVersion(runtime::Version),
     UnknownVersion(runtime::VersionError),
     DatabaseError(postgres::error::Error),
+    InUse, // Cluster is already in use; cannot lock exclusively.
     Other(Output),
 }
 
@@ -28,6 +29,7 @@ impl fmt::Display for ClusterError {
             UnsupportedVersion(ref e) => write!(fmt, "PostgreSQL version not supported: {}", e),
             UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {}", e),
             DatabaseError(ref e) => write!(fmt, "database error: {}", e),
+            InUse => write!(fmt, "cluster in use; cannot lock exclusively"),
             Other(ref e) => write!(fmt, "external command failed: {:?}", e),
         }
     }
@@ -42,6 +44,7 @@ impl error::Error for ClusterError {
             ClusterError::UnsupportedVersion(_) => None,
             ClusterError::UnknownVersion(ref error) => Some(error),
             ClusterError::DatabaseError(ref error) => Some(error),
+            ClusterError::InUse => None,
             ClusterError::Other(_) => None,
         }
     }
@@ -214,20 +217,25 @@ impl Cluster {
     }
 
     /// Return an open `File` for this cluster's lock file.
-    fn lock(&self) -> io::Result<fs::File> {
+    fn lock(&self) -> io::Result<FileLock> {
         fs::OpenOptions::new()
             .append(true)
             .create(true)
             .open(&self.lockfile)
+            .map(FileLock::from)
     }
 
     /// Create the cluster if it does not already exist.
     pub fn create(&self) -> Result<bool, ClusterError> {
-        self.lock()?.do_exclusive(|| self._create())?
+        match self.lock()?.do_exclusive(|| self._create()) {
+            Err(nix::errno::Errno::EAGAIN) if self.exists() => Ok(false),
+            Err(nix::errno::Errno::EAGAIN) => Err(ClusterError::InUse),
+            other => other?,
+        }
     }
 
     fn _create(&self) -> Result<bool, ClusterError> {
-        match self.datadir.join("PG_VERSION").is_file() {
+        match self.exists() {
             // Nothing more to do; the cluster is already in place.
             true => Ok(false),
             // Create the cluster and report back that we did so.
@@ -246,16 +254,21 @@ impl Cluster {
 
     // Start the cluster if it's not already running.
     pub fn start(&self) -> Result<bool, ClusterError> {
-        self.lock()?.do_exclusive(|| self._start())?
+        match self.lock()?.do_exclusive(|| self._start()) {
+            Err(nix::errno::Errno::EAGAIN) if self.running()? => Ok(false),
+            Err(nix::errno::Errno::EAGAIN) => Err(ClusterError::InUse),
+            other => other?,
+        }
     }
 
     fn _start(&self) -> Result<bool, ClusterError> {
-        // If the cluster's already running, don't do anything.
-        if self.running()? {
-            return Ok(false);
-        }
         // Ensure that the cluster has been created.
         self._create()?;
+        // Check if we're running already.
+        if self.running()? {
+            // We didn't start this cluster; say so.
+            return Ok(false);
+        }
         // This next thing is a wart of the `shell-escape` crate. UNIX paths are
         // bytes and the only thing they're not allowed to contain is, as far as
         // I know, the null byte. The encoding is defined by the locale.
@@ -313,11 +326,13 @@ impl Cluster {
     }
 
     pub fn shell(&self, database: &str) -> Result<ExitStatus, ClusterError> {
-        let mut command = self.runtime.execute("psql");
-        command.arg("--quiet").arg("--").arg(database);
-        command.env("PGDATA", &self.datadir);
-        command.env("PGHOST", &self.datadir);
-        Ok(command.spawn()?.wait()?)
+        self.lock()?.do_shared(|| {
+            let mut command = self.runtime.execute("psql");
+            command.arg("--quiet").arg("--").arg(database);
+            command.env("PGDATA", &self.datadir);
+            command.env("PGHOST", &self.datadir);
+            Ok(command.spawn()?.wait()?)
+        })?
     }
 
     // The names of databases in this cluster.
@@ -346,7 +361,11 @@ impl Cluster {
 
     // Stop the cluster if it's running.
     pub fn stop(&self) -> Result<bool, ClusterError> {
-        self.lock()?.do_exclusive(|| self._stop())?
+        match self.lock()?.do_exclusive(|| self._stop()) {
+            Err(nix::errno::Errno::EAGAIN) if !self.running()? => Ok(false),
+            Err(nix::errno::Errno::EAGAIN) => Err(ClusterError::InUse),
+            other => other?,
+        }
     }
 
     fn _stop(&self) -> Result<bool, ClusterError> {
@@ -369,7 +388,10 @@ impl Cluster {
 
     // Destroy the cluster if it exists, after stopping it.
     pub fn destroy(&self) -> Result<bool, ClusterError> {
-        self.lock()?.do_exclusive(|| self._destroy())?
+        match self.lock()?.do_exclusive(|| self._destroy()) {
+            Err(nix::errno::Errno::EAGAIN) => Err(ClusterError::InUse),
+            other => other?,
+        }
     }
 
     fn _destroy(&self) -> Result<bool, ClusterError> {
@@ -397,7 +419,7 @@ mod tests {
             println!("{:?}", runtime);
             let cluster = Cluster::new("some/path", runtime);
             assert_eq!(Path::new("some/path"), cluster.datadir);
-            assert!(cluster.running().unwrap());
+            assert!(!cluster.running().unwrap());
         }
     }
 
