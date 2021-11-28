@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 use std::{env, error, fmt, fs, io};
@@ -88,9 +89,18 @@ pub struct Cluster {
 impl Cluster {
     pub fn new<P: AsRef<Path>>(datadir: P, runtime: runtime::Runtime) -> Self {
         let datadir = datadir.as_ref();
+        let lockname =
+            datadir
+                .file_name()
+                .map_or(OsString::from(".postgresfixture.lock"), |file_name| {
+                    let mut buf = OsString::from(".");
+                    buf.push(file_name);
+                    buf.push(".lock");
+                    buf
+                });
         Self {
             datadir: datadir.to_path_buf(),
-            lockfile: datadir.parent().unwrap_or(datadir).join(".cluster.lock"),
+            lockfile: datadir.parent().unwrap_or(datadir).join(lockname),
             runtime,
         }
     }
