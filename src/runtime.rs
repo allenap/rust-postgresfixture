@@ -7,19 +7,13 @@ pub use crate::version::{Version, VersionError};
 
 use crate::util;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.
     ///
     /// Can be omitted (i.e. `None`) to search `PATH` only.
     pub bindir: Option<PathBuf>,
-}
-
-impl Default for Runtime {
-    fn default() -> Self {
-        Self { bindir: None }
-    }
 }
 
 impl Runtime {
