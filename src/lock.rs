@@ -11,13 +11,26 @@ pub(crate) struct LockedFileShared(File);
 #[derive(Debug)]
 pub(crate) struct LockedFileExclusive(File);
 
-#[allow(unused)]
-impl UnlockedFile {
-    /// Create a new `UnlockedFile` for the given `File`.
-    pub fn from(file: File) -> Self {
+impl From<File> for UnlockedFile {
+    fn from(file: File) -> Self {
         Self(file)
     }
+}
 
+impl TryFrom<&std::path::Path> for UnlockedFile {
+    type Error = std::io::Error;
+
+    fn try_from(path: &std::path::Path) -> std::io::Result<Self> {
+        std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)
+            .map(UnlockedFile)
+    }
+}
+
+#[allow(unused)]
+impl UnlockedFile {
     pub fn try_lock_shared(self) -> Result<LockedFileShared> {
         flock(self.0.as_raw_fd(), FlockArg::LockSharedNonblock)?;
         Ok(LockedFileShared(self.0))
