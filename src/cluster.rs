@@ -1,11 +1,10 @@
-use std::ffi::OsString;
+use nix::errno::Errno;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 use std::{env, error, fmt, fs, io};
 
 use shell_escape::escape;
 
-use crate::lock::FileLock;
 use crate::runtime;
 
 #[derive(Debug)]
@@ -80,27 +79,14 @@ pub struct Cluster {
     ///
     /// Corresponds to the `PGDATA` environment variable.
     datadir: PathBuf,
-    /// Lock file.
-    lockfile: PathBuf,
     /// The installation of PostgreSQL to use with this cluster.
     runtime: runtime::Runtime,
 }
 
 impl Cluster {
     pub fn new<P: AsRef<Path>>(datadir: P, runtime: runtime::Runtime) -> Self {
-        let datadir = datadir.as_ref();
-        let lockname =
-            datadir
-                .file_name()
-                .map_or(OsString::from(".postgresfixture.lock"), |file_name| {
-                    let mut buf = OsString::from(".");
-                    buf.push(file_name);
-                    buf.push(".lock");
-                    buf
-                });
         Self {
-            datadir: datadir.to_path_buf(),
-            lockfile: datadir.parent().unwrap_or(datadir).join(lockname),
+            datadir: datadir.as_ref().to_path_buf(),
             runtime,
         }
     }
@@ -226,21 +212,12 @@ impl Cluster {
         self.datadir.join("backend.log")
     }
 
-    /// Return an open `File` for this cluster's lock file.
-    fn lock(&self) -> io::Result<FileLock> {
-        fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&self.lockfile)
-            .map(FileLock::from)
-    }
-
     /// Create the cluster if it does not already exist.
     pub fn create(&self) -> Result<bool, ClusterError> {
-        match self.lock()?.do_exclusive(|| self._create()) {
-            Err(nix::errno::Errno::EAGAIN) if self.exists() => Ok(false),
-            Err(nix::errno::Errno::EAGAIN) => Err(ClusterError::InUse),
-            other => other?,
+        match self._create() {
+            Err(ClusterError::UnixError(Errno::EAGAIN)) if self.exists() => Ok(false),
+            Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
+            other => other,
         }
     }
 
@@ -264,10 +241,10 @@ impl Cluster {
 
     // Start the cluster if it's not already running.
     pub fn start(&self) -> Result<bool, ClusterError> {
-        match self.lock()?.do_exclusive(|| self._start()) {
-            Err(nix::errno::Errno::EAGAIN) if self.running()? => Ok(false),
-            Err(nix::errno::Errno::EAGAIN) => Err(ClusterError::InUse),
-            other => other?,
+        match self._start() {
+            Err(ClusterError::UnixError(Errno::EAGAIN)) if self.running()? => Ok(false),
+            Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
+            other => other,
         }
     }
 
@@ -336,13 +313,11 @@ impl Cluster {
     }
 
     pub fn shell(&self, database: &str) -> Result<ExitStatus, ClusterError> {
-        self.lock()?.do_shared(|| {
-            let mut command = self.runtime.execute("psql");
-            command.arg("--quiet").arg("--").arg(database);
-            command.env("PGDATA", &self.datadir);
-            command.env("PGHOST", &self.datadir);
-            Ok(command.spawn()?.wait()?)
-        })?
+        let mut command = self.runtime.execute("psql");
+        command.arg("--quiet").arg("--").arg(database);
+        command.env("PGDATA", &self.datadir);
+        command.env("PGHOST", &self.datadir);
+        Ok(command.spawn()?.wait()?)
     }
 
     // The names of databases in this cluster.
@@ -371,10 +346,10 @@ impl Cluster {
 
     // Stop the cluster if it's running.
     pub fn stop(&self) -> Result<bool, ClusterError> {
-        match self.lock()?.do_exclusive(|| self._stop()) {
-            Err(nix::errno::Errno::EAGAIN) if !self.running()? => Ok(false),
-            Err(nix::errno::Errno::EAGAIN) => Err(ClusterError::InUse),
-            other => other?,
+        match self._stop() {
+            Err(ClusterError::UnixError(Errno::EAGAIN)) if !self.running()? => Ok(false),
+            Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
+            other => other,
         }
     }
 
@@ -398,9 +373,9 @@ impl Cluster {
 
     // Destroy the cluster if it exists, after stopping it.
     pub fn destroy(&self) -> Result<bool, ClusterError> {
-        match self.lock()?.do_exclusive(|| self._destroy()) {
-            Err(nix::errno::Errno::EAGAIN) => Err(ClusterError::InUse),
-            other => other?,
+        match self._destroy() {
+            Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
+            other => other,
         }
     }
 
