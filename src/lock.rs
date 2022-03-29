@@ -4,60 +4,90 @@ use std::os::unix::io::AsRawFd;
 use nix::fcntl::{flock, FlockArg};
 use nix::Result;
 
-pub struct FileLock(File);
+#[derive(Debug)]
+pub(crate) struct UnlockedFile(File);
+#[derive(Debug)]
+pub(crate) struct LockedFileShared(File);
+#[derive(Debug)]
+pub(crate) struct LockedFileExclusive(File);
 
-impl FileLock {
-    /// Create a new `FileLock` for the given `File`.
+#[allow(unused)]
+impl UnlockedFile {
+    /// Create a new `UnlockedFile` for the given `File`.
     pub fn from(file: File) -> Self {
         Self(file)
     }
 
-    /// Call the given closure with an exclusive `flock` on this file.
-    ///
-    /// If this file has already been locked elsewhere (via another file
-    /// descriptor in this process, or in another process), this will NOT block
-    /// until it is able to acquire an exclusive lock, and instead return
-    /// `Err(nix::errno::Errno::EAGAIN)`.
-    pub fn do_exclusive<F, T>(&mut self, action: F) -> Result<T>
-    where
-        F: FnOnce() -> T,
-    {
-        let guard = FileLockGuard(&self.0, FlockArg::Unlock);
-        flock(self.0.as_raw_fd(), FlockArg::LockExclusiveNonblock)?;
-        let result = action();
-        drop(guard);
-        Ok(result)
+    pub fn try_lock_shared(self) -> Result<LockedFileShared> {
+        flock(self.0.as_raw_fd(), FlockArg::LockSharedNonblock)?;
+        Ok(LockedFileShared(self.0))
     }
 
-    /// Call the given closure with a shared `flock` on this file.
-    ///
-    /// If this file has already been locked elsewhere (via another file
-    /// descriptor in this process, or in another process), this will block
-    /// until it is able to acquire a shared lock.
-    pub fn do_shared<F, T>(&mut self, action: F) -> Result<T>
-    where
-        F: FnOnce() -> T,
-    {
-        let guard = FileLockGuard(&self.0, FlockArg::Unlock);
+    pub fn lock_shared(self) -> Result<LockedFileShared> {
         flock(self.0.as_raw_fd(), FlockArg::LockShared)?;
-        let result = action();
-        drop(guard);
-        Ok(result)
+        Ok(LockedFileShared(self.0))
+    }
+
+    pub fn try_lock_exclusive(self) -> Result<LockedFileExclusive> {
+        flock(self.0.as_raw_fd(), FlockArg::LockExclusiveNonblock)?;
+        Ok(LockedFileExclusive(self.0))
+    }
+
+    pub fn lock_exclusive(self) -> Result<LockedFileExclusive> {
+        flock(self.0.as_raw_fd(), FlockArg::LockExclusive)?;
+        Ok(LockedFileExclusive(self.0))
     }
 }
 
-/// Guard used to ensure that locks are downgraded or released during unwinding.
-struct FileLockGuard<'a>(&'a File, FlockArg);
+#[allow(unused)]
+impl LockedFileShared {
+    pub fn try_lock_exclusive(self) -> Result<LockedFileExclusive> {
+        flock(self.0.as_raw_fd(), FlockArg::LockExclusiveNonblock)?;
+        Ok(LockedFileExclusive(self.0))
+    }
 
-impl<'a> Drop for FileLockGuard<'a> {
-    fn drop(&mut self) {
-        flock(self.0.as_raw_fd(), self.1).unwrap()
+    pub fn lock_exclusive(self) -> Result<LockedFileExclusive> {
+        flock(self.0.as_raw_fd(), FlockArg::LockExclusive)?;
+        Ok(LockedFileExclusive(self.0))
+    }
+
+    pub fn try_unlock(self) -> Result<UnlockedFile> {
+        flock(self.0.as_raw_fd(), FlockArg::UnlockNonblock)?;
+        Ok(UnlockedFile(self.0))
+    }
+
+    pub fn unlock(self) -> Result<UnlockedFile> {
+        flock(self.0.as_raw_fd(), FlockArg::Unlock)?;
+        Ok(UnlockedFile(self.0))
+    }
+}
+
+#[allow(unused)]
+impl LockedFileExclusive {
+    pub fn try_lock_shared(self) -> Result<LockedFileShared> {
+        flock(self.0.as_raw_fd(), FlockArg::LockSharedNonblock)?;
+        Ok(LockedFileShared(self.0))
+    }
+
+    pub fn lock_shared(self) -> Result<LockedFileShared> {
+        flock(self.0.as_raw_fd(), FlockArg::LockShared)?;
+        Ok(LockedFileShared(self.0))
+    }
+
+    pub fn try_unlock(self) -> Result<UnlockedFile> {
+        flock(self.0.as_raw_fd(), FlockArg::UnlockNonblock)?;
+        Ok(UnlockedFile(self.0))
+    }
+
+    pub fn unlock(self) -> Result<UnlockedFile> {
+        flock(self.0.as_raw_fd(), FlockArg::Unlock)?;
+        Ok(UnlockedFile(self.0))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::FileLock;
+    use super::UnlockedFile;
 
     use std::fs::OpenOptions;
     use std::os::unix::io::AsRawFd;
@@ -87,31 +117,32 @@ mod tests {
     }
 
     #[test]
-    fn file_do_exclusive_takes_exclusive_flock() {
+    fn file_lock_exclusive_takes_exclusive_flock() {
         let lock_dir = tempdir::TempDir::new("locks").unwrap();
         let lock_filename = lock_dir.path().join("lock");
-        let mut lock = OpenOptions::new()
+        let lock = OpenOptions::new()
             .append(true)
             .create(true)
             .open(&lock_filename)
-            .map(FileLock::from)
+            .map(UnlockedFile::from)
             .unwrap();
 
         assert!(can_lock_exclusive(&lock_filename));
         assert!(can_lock_shared(&lock_filename));
 
-        lock.do_exclusive(|| {
-            assert!(!can_lock_exclusive(&lock_filename));
-            assert!(!can_lock_shared(&lock_filename));
-        })
-        .unwrap();
+        let lock = lock.lock_exclusive().unwrap();
+
+        assert!(!can_lock_exclusive(&lock_filename));
+        assert!(!can_lock_shared(&lock_filename));
+
+        lock.unlock().unwrap();
 
         assert!(can_lock_exclusive(&lock_filename));
         assert!(can_lock_shared(&lock_filename));
     }
 
     #[test]
-    fn file_do_exclusive_does_not_block_on_existing_shared_lock() {
+    fn file_try_lock_exclusive_does_not_block_on_existing_shared_lock() {
         let lock_dir = tempdir::TempDir::new("locks").unwrap();
         let lock_filename = lock_dir.path().join("lock");
         let open_lock_file = || {
@@ -119,20 +150,20 @@ mod tests {
                 .append(true)
                 .create(true)
                 .open(&lock_filename)
-                .map(FileLock::from)
+                .map(UnlockedFile::from)
                 .unwrap()
         };
 
-        assert!(open_lock_file()
-            .do_shared(|| match open_lock_file().do_exclusive(|| false) {
-                Err(nix::errno::Errno::EAGAIN) => true,
-                other => other.unwrap(),
-            })
-            .unwrap());
+        let _lock_shared = open_lock_file().lock_shared().unwrap();
+
+        assert!(match open_lock_file().try_lock_exclusive() {
+            Err(nix::errno::Errno::EAGAIN) => true,
+            _ => false,
+        });
     }
 
     #[test]
-    fn file_do_exclusive_does_not_block_on_existing_exclusive_lock() {
+    fn file_try_lock_exclusive_does_not_block_on_existing_exclusive_lock() {
         let lock_dir = tempdir::TempDir::new("locks").unwrap();
         let lock_filename = lock_dir.path().join("lock");
         let open_lock_file = || {
@@ -140,39 +171,15 @@ mod tests {
                 .append(true)
                 .create(true)
                 .open(&lock_filename)
-                .map(FileLock::from)
+                .map(UnlockedFile::from)
                 .unwrap()
         };
 
-        assert!(open_lock_file()
-            .do_exclusive(|| match open_lock_file().do_exclusive(|| false) {
-                Err(nix::errno::Errno::EAGAIN) => true,
-                other => other.unwrap(),
-            })
-            .unwrap());
-    }
+        let _lock_exclusive = open_lock_file().lock_exclusive().unwrap();
 
-    #[test]
-    fn file_do_shared_takes_shared_flock() {
-        let lock_dir = tempdir::TempDir::new("locks").unwrap();
-        let lock_filename = lock_dir.path().join("lock");
-        let mut lock = OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&lock_filename)
-            .map(FileLock::from)
-            .unwrap();
-
-        assert!(can_lock_exclusive(&lock_filename));
-        assert!(can_lock_shared(&lock_filename));
-
-        lock.do_shared(|| {
-            assert!(!can_lock_exclusive(&lock_filename));
-            assert!(can_lock_shared(&lock_filename));
-        })
-        .unwrap();
-
-        assert!(can_lock_exclusive(&lock_filename));
-        assert!(can_lock_shared(&lock_filename));
+        assert!(match open_lock_file().try_lock_exclusive() {
+            Err(nix::errno::Errno::EAGAIN) => true,
+            _ => false,
+        });
     }
 }
