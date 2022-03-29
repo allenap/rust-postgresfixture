@@ -24,6 +24,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = "^2.33.3"
+either = "1.6.1"
 nix = "^0.23.0"
 postgres = "^0.19.2"
 regex = "^1.5.4"

@@ -1,16 +1,18 @@
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
 
+use either::{Either, Left, Right};
+use nix::errno::Errno;
 use nix::fcntl::{flock, FlockArg};
 use nix::Result;
 use uuid::Uuid;
 
 #[derive(Debug)]
-pub(crate) struct UnlockedFile(File);
+pub struct UnlockedFile(File);
 #[derive(Debug)]
-pub(crate) struct LockedFileShared(File);
+pub struct LockedFileShared(File);
 #[derive(Debug)]
-pub(crate) struct LockedFileExclusive(File);
+pub struct LockedFileExclusive(File);
 
 impl From<File> for UnlockedFile {
     fn from(file: File) -> Self {
@@ -44,9 +46,12 @@ impl TryFrom<&Uuid> for UnlockedFile {
 
 #[allow(unused)]
 impl UnlockedFile {
-    pub fn try_lock_shared(self) -> Result<LockedFileShared> {
-        flock(self.0.as_raw_fd(), FlockArg::LockSharedNonblock)?;
-        Ok(LockedFileShared(self.0))
+    pub fn try_lock_shared(self) -> Result<Either<Self, LockedFileShared>> {
+        match flock(self.0.as_raw_fd(), FlockArg::LockSharedNonblock) {
+            Ok(_) => Ok(Right(LockedFileShared(self.0))),
+            Err(Errno::EAGAIN) => Ok(Left(self)),
+            Err(err) => Err(err)?,
+        }
     }
 
     pub fn lock_shared(self) -> Result<LockedFileShared> {
@@ -54,9 +59,12 @@ impl UnlockedFile {
         Ok(LockedFileShared(self.0))
     }
 
-    pub fn try_lock_exclusive(self) -> Result<LockedFileExclusive> {
-        flock(self.0.as_raw_fd(), FlockArg::LockExclusiveNonblock)?;
-        Ok(LockedFileExclusive(self.0))
+    pub fn try_lock_exclusive(self) -> Result<Either<Self, LockedFileExclusive>> {
+        match flock(self.0.as_raw_fd(), FlockArg::LockExclusiveNonblock) {
+            Ok(_) => Ok(Right(LockedFileExclusive(self.0))),
+            Err(Errno::EAGAIN) => Ok(Left(self)),
+            Err(err) => Err(err)?,
+        }
     }
 
     pub fn lock_exclusive(self) -> Result<LockedFileExclusive> {
@@ -67,9 +75,12 @@ impl UnlockedFile {
 
 #[allow(unused)]
 impl LockedFileShared {
-    pub fn try_lock_exclusive(self) -> Result<LockedFileExclusive> {
-        flock(self.0.as_raw_fd(), FlockArg::LockExclusiveNonblock)?;
-        Ok(LockedFileExclusive(self.0))
+    pub fn try_lock_exclusive(self) -> Result<Either<Self, LockedFileExclusive>> {
+        match flock(self.0.as_raw_fd(), FlockArg::LockExclusiveNonblock) {
+            Ok(_) => Ok(Right(LockedFileExclusive(self.0))),
+            Err(Errno::EAGAIN) => Ok(Left(self)),
+            Err(err) => Err(err)?,
+        }
     }
 
     pub fn lock_exclusive(self) -> Result<LockedFileExclusive> {
@@ -77,9 +88,12 @@ impl LockedFileShared {
         Ok(LockedFileExclusive(self.0))
     }
 
-    pub fn try_unlock(self) -> Result<UnlockedFile> {
-        flock(self.0.as_raw_fd(), FlockArg::UnlockNonblock)?;
-        Ok(UnlockedFile(self.0))
+    pub fn try_unlock(self) -> Result<Either<Self, UnlockedFile>> {
+        match flock(self.0.as_raw_fd(), FlockArg::UnlockNonblock) {
+            Ok(_) => Ok(Right(UnlockedFile(self.0))),
+            Err(Errno::EAGAIN) => Ok(Left(self)),
+            Err(err) => Err(err)?,
+        }
     }
 
     pub fn unlock(self) -> Result<UnlockedFile> {
@@ -90,9 +104,12 @@ impl LockedFileShared {
 
 #[allow(unused)]
 impl LockedFileExclusive {
-    pub fn try_lock_shared(self) -> Result<LockedFileShared> {
-        flock(self.0.as_raw_fd(), FlockArg::LockSharedNonblock)?;
-        Ok(LockedFileShared(self.0))
+    pub fn try_lock_shared(self) -> Result<Either<Self, LockedFileShared>> {
+        match flock(self.0.as_raw_fd(), FlockArg::LockSharedNonblock) {
+            Ok(_) => Ok(Right(LockedFileShared(self.0))),
+            Err(Errno::EAGAIN) => Ok(Left(self)),
+            Err(err) => Err(err)?,
+        }
     }
 
     pub fn lock_shared(self) -> Result<LockedFileShared> {
@@ -100,9 +117,12 @@ impl LockedFileExclusive {
         Ok(LockedFileShared(self.0))
     }
 
-    pub fn try_unlock(self) -> Result<UnlockedFile> {
-        flock(self.0.as_raw_fd(), FlockArg::UnlockNonblock)?;
-        Ok(UnlockedFile(self.0))
+    pub fn try_unlock(self) -> Result<Either<Self, UnlockedFile>> {
+        match flock(self.0.as_raw_fd(), FlockArg::UnlockNonblock) {
+            Ok(_) => Ok(Right(UnlockedFile(self.0))),
+            Err(Errno::EAGAIN) => Ok(Left(self)),
+            Err(err) => Err(err)?,
+        }
     }
 
     pub fn unlock(self) -> Result<UnlockedFile> {
@@ -119,6 +139,7 @@ mod tests {
     use std::os::unix::io::AsRawFd;
     use std::path::Path;
 
+    use either::Left;
     use nix::fcntl::{flock, FlockArg};
 
     fn can_lock<P: AsRef<Path>>(filename: P, exclusive: bool) -> bool {
@@ -183,7 +204,7 @@ mod tests {
         let _lock_shared = open_lock_file().lock_shared().unwrap();
 
         assert!(match open_lock_file().try_lock_exclusive() {
-            Err(nix::errno::Errno::EAGAIN) => true,
+            Ok(Left(_)) => true,
             _ => false,
         });
     }
@@ -204,7 +225,7 @@ mod tests {
         let _lock_exclusive = open_lock_file().lock_exclusive().unwrap();
 
         assert!(match open_lock_file().try_lock_exclusive() {
-            Err(nix::errno::Errno::EAGAIN) => true,
+            Ok(Left(_)) => true,
             _ => false,
         });
     }
