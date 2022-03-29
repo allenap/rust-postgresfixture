@@ -3,6 +3,7 @@ use std::os::unix::io::AsRawFd;
 
 use nix::fcntl::{flock, FlockArg};
 use nix::Result;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub(crate) struct UnlockedFile(File);
@@ -26,6 +27,18 @@ impl TryFrom<&std::path::Path> for UnlockedFile {
             .create(true)
             .open(path)
             .map(UnlockedFile)
+    }
+}
+
+impl TryFrom<&Uuid> for UnlockedFile {
+    type Error = std::io::Error;
+
+    fn try_from(uuid: &Uuid) -> std::io::Result<Self> {
+        let mut buffer = Uuid::encode_buffer();
+        let uuid = uuid.to_simple().encode_lower(&mut buffer);
+        let filename = ".postgresfixture.".to_owned() + uuid;
+        let path = std::env::temp_dir().join(filename);
+        UnlockedFile::try_from(&*path)
     }
 }
 
