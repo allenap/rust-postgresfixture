@@ -27,6 +27,7 @@ clap = "^2.33.3"
 either = "1.6.1"
 nix = "^0.23.0"
 postgres = "^0.19.2"
+rand = "0.8.5"
 regex = "^1.5.4"
 shell-escape = "^0.1.5"
 uuid = {version = "^0.8.2", features = ["v5"]}

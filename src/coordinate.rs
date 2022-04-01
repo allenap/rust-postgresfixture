@@ -1,4 +1,7 @@
+use std::time::Duration;
+
 use either::Either::{Left, Right};
+use rand::RngCore;
 
 use crate::lock;
 use crate::{Cluster, ClusterError};
@@ -11,8 +14,6 @@ pub fn run<F, T>(
 where
     F: FnOnce() -> T,
 {
-    let delay = std::time::Duration::from_millis(1111);
-
     let lock: lock::LockedFileShared = loop {
         lock = match lock.try_lock_exclusive() {
             Ok(Left(lock)) => {
@@ -25,7 +26,15 @@ where
                 if cluster.running()? {
                     break lock;
                 } else {
+                    // Release all locks then sleep for a random time between
+                    // 200ms and 1000ms in an attempt to make sure that when
+                    // there are many competing processes one of them rapidly
+                    // acquires an exclusive lock and is able to create and
+                    // start the cluster.
                     let lock = lock.unlock()?;
+                    let delay = rand::thread_rng().next_u32();
+                    let delay = 200 + (delay % 800);
+                    let delay = Duration::from_millis(delay as u64);
                     std::thread::sleep(delay);
                     lock
                 }
