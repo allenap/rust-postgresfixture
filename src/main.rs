@@ -2,10 +2,12 @@
 extern crate clap;
 
 use std::env;
+use std::fs;
+use std::io;
 use std::path::PathBuf;
 use std::process::exit;
 
-use postgresfixture::ClusterError;
+use postgresfixture::lock::UnlockedFile;
 
 fn main() {
     exit(match parse_args().subcommand() {
@@ -63,33 +65,41 @@ fn parse_args() -> clap::ArgMatches<'static> {
         .get_matches()
 }
 
+const UUID_NS: uuid::Uuid = uuid::Uuid::from_u128(93875103436633470414348750305797058811);
+
 fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
-    let cluster = postgresfixture::Cluster::new(
-        match database_dir.is_absolute() {
-            true => database_dir,
-            false => env::current_dir()
-                .expect("could not get current working directory")
-                .join(database_dir),
-        },
-        postgresfixture::Runtime::default(),
-    );
-    match cluster.start() {
-        Err(ClusterError::InUse) => false,
-        other => other.expect("could not start cluster"),
+    // Create the cluster directory first.
+    match fs::create_dir(&database_dir) {
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => (),
+        other => other.expect("could not create database directory"),
     };
-    if !cluster
-        .databases()
-        .expect("could not list databases")
-        .contains(&database_name.to_string())
-    {
-        cluster
-            .createdb(database_name)
-            .expect("could not create database");
-    }
-    cluster.shell(database_name).expect("shell failed");
-    match cluster.stop() {
-        Err(ClusterError::InUse) => false,
-        other => other.expect("could not stop cluster"),
-    };
+
+    // Obtain a canonical path to the cluster directory.
+    let database_dir = database_dir
+        .canonicalize()
+        .expect("could not canonicalize database directory");
+
+    // Use the canonical path to construct the UUID with which we'll lock this
+    // cluster. Use the `Debug` form of `database_dir` for the lock file UUID.
+    let lock_uuid = uuid::Uuid::new_v5(&UUID_NS, format!("{:?}", &database_dir).as_bytes());
+    let lock = UnlockedFile::try_from(&lock_uuid).expect("could not create lock file");
+
+    // For now use the default PostgreSQL runtime.
+    let cluster = postgresfixture::Cluster::new(&database_dir, postgresfixture::Runtime::default());
+
+    postgresfixture::run(&cluster, lock, || {
+        if !cluster
+            .databases()
+            .expect("could not list databases")
+            .contains(&database_name.to_string())
+        {
+            cluster
+                .createdb(database_name)
+                .expect("could not create database");
+        }
+        cluster.shell(database_name).expect("shell failed");
+    })
+    .unwrap();
+
     0
 }

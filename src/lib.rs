@@ -12,10 +12,12 @@
 //!
 
 mod cluster;
-mod lock;
+mod coordinate;
+pub mod lock;
 mod runtime;
 mod util;
 mod version;
 
 pub use cluster::{Cluster, ClusterError};
+pub use coordinate::run;
 pub use runtime::Runtime;

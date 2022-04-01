@@ -2,11 +2,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 use std::{env, error, fmt, fs, io};
 
-use either::{Left, Right};
 use nix::errno::Errno;
 use shell_escape::escape;
 
-use crate::lock::{LockedFileShared, UnlockedFile};
 use crate::runtime;
 
 #[derive(Debug)]
@@ -388,43 +386,6 @@ impl Cluster {
         } else {
             Ok(false)
         }
-    }
-
-    pub fn run<F, T>(self, lock: UnlockedFile, action: F) -> Result<T, ClusterError>
-    where
-        F: FnOnce() -> T,
-    {
-        let lock: LockedFileShared = match lock.try_lock_exclusive() {
-            Ok(Left(lock)) => {
-                // The cluster is already locked; we assume the cluster is
-                // already running by the time we've switched to a shared lock.
-                lock.lock_shared()?
-            }
-            Ok(Right(lock)) => {
-                // We have an exclusive lock, so try to start the cluster.
-                match self.start() {
-                    Ok(_) | Err(ClusterError::InUse) => (),
-                    Err(err) => Err(err)?,
-                };
-                lock.lock_shared()?
-            }
-            Err(err) => Err(err)?,
-        };
-
-        let result = action();
-
-        // If we can get an exclusive lock, then we're the only
-        // remaining user, and we should shut down the cluster.
-        match lock.try_lock_exclusive() {
-            Ok(Left(lock)) => lock.unlock()?,
-            Ok(Right(lock)) => match self.stop() {
-                Ok(_) | Err(ClusterError::InUse) => lock.unlock()?,
-                Err(err) => Err(err)?,
-            },
-            Err(err) => Err(err)?,
-        };
-
-        Ok(result)
     }
 }
 

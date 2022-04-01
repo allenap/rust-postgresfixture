@@ -29,7 +29,7 @@ nix = "^0.23.0"
 postgres = "^0.19.2"
 regex = "^1.5.4"
 shell-escape = "^0.1.5"
-uuid = "^0.8.2"
+uuid = {version = "^0.8.2", features = ["v5"]}
 
 [dev-dependencies]
 tempdir = "^0.3.7"
