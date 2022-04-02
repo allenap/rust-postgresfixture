@@ -1,3 +1,11 @@
+//! Discover and use PostgreSQL installations.
+//!
+//! You may have many versions of PostgreSQL installed on a system. For example,
+//! on an Ubuntu system, they may be in `/usr/lib/postgresql/*`. On macOS using
+//! Homebrew, you may find them in `/usr/local/Cellar/postgresql@*`. [`Runtime`]
+//! can traverse your `PATH` to discover all the versions currently available to
+//! you.
+
 use std::env;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -46,8 +54,9 @@ impl Runtime {
 
     /// Get the version number of PostgreSQL.
     ///
-    /// https://www.postgresql.org/support/versioning/ shows that version
-    /// numbers are NOT SemVer compatible, so we have to parse them ourselves.
+    /// <https://www.postgresql.org/support/versioning/> shows that version
+    /// numbers are **not** SemVer compatible, so we have to parse them
+    /// ourselves.
     pub fn version(&self) -> Result<Version, VersionError> {
         // Execute pg_ctl and extract version.
         let version_output = self.execute("pg_ctl").arg("--version").output()?;
@@ -57,6 +66,13 @@ impl Runtime {
         Ok(version_string.parse()?)
     }
 
+    /// Return a [`Command`] prepped to run the given `program` in this
+    /// PostgreSQL runtime.
+    ///
+    /// ```rust
+    /// # use postgresfixture::runtime::Runtime;
+    /// let version = Runtime::default().execute("pg_ctl").arg("--version").output().unwrap();
+    /// ```
     pub fn execute(&self, program: &str) -> Command {
         let mut command;
         match self.bindir {

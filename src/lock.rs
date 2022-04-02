@@ -1,3 +1,20 @@
+//! File-based locking using [`flock(2)`](https://linux.die.net/man/2/flock).
+//!
+//! You must start with an [`UnlockedFile`].
+//!
+//! ```rust
+//! let lock_dir = tempdir::TempDir::new("locks").unwrap();
+//! # use postgresfixture::lock::UnlockedFile;
+//! let mut lock = UnlockedFile::try_from(lock_dir.path().join("foo").as_path()).unwrap();
+//! let lock = lock.lock_shared().unwrap();
+//! let lock = lock.lock_exclusive().unwrap();
+//! let lock = lock.unlock().unwrap();
+//! ```
+//!
+//! Dropping a [`LockedFileShared`] or [`LockedFileExclusive`] drops their locks
+//! too, by virtue of dropping the [`File`] they each wrap, so there's no need
+//! to call `unlock` unless you prefer to be explicit.
+
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
 

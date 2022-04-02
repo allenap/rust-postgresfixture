@@ -1,3 +1,5 @@
+//! Create, start, introspect, stop, and destroy PostgreSQL clusters.
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 use std::{env, error, fmt, fs, io};
@@ -74,6 +76,13 @@ impl From<postgres::error::Error> for ClusterError {
     }
 }
 
+/// Representation of a PostgreSQL cluster.
+///
+/// The cluster may not yet exist on disk. It may exist but be stopped, or it
+/// may be running. The methods here can be used to create, start, introspect,
+/// stop, and destroy the cluster. There's no protection against concurrent
+/// changes to the cluster made by other processes, but the functions in the
+/// [`coordinate`][`crate::coordinate`] module may help.
 pub struct Cluster {
     /// The data directory of the cluster.
     ///
@@ -98,14 +107,16 @@ impl Cluster {
         command
     }
 
+    /// A fairly simplistic check: does the data directory exist and does it
+    /// contain a file named `PG_VERSION`?
     pub fn exists(&self) -> bool {
         self.datadir.is_dir() && self.datadir.join("PG_VERSION").is_file()
     }
 
     /// Check if this cluster is running.
     ///
-    /// Tries to distinguish carefully between "definitely running", "definitely not running", and
-    /// "don't know". The latter results in `ClusterError`.
+    /// Tries to distinguish carefully between "definitely running", "definitely
+    /// not running", and "don't know". The latter results in `ClusterError`.
     pub fn running(&self) -> Result<bool, ClusterError> {
         let output = self.ctl().arg("status").output()?;
         let code = match output.status.code() {
