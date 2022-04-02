@@ -38,7 +38,7 @@ pub fn run_and_stop<F, T>(
 where
     F: FnOnce() -> T,
 {
-    let lock = start(cluster, lock)?;
+    let lock = startup(cluster, lock)?;
     let result = action();
     shutdown(cluster, lock, |cluster| cluster.stop())?;
     Ok(result)
@@ -59,13 +59,13 @@ pub fn run_and_destroy<F, T>(
 where
     F: FnOnce() -> T,
 {
-    let lock = start(cluster, lock)?;
+    let lock = startup(cluster, lock)?;
     let result = action();
     shutdown(cluster, lock, |cluster| cluster.destroy())?;
     Ok(result)
 }
 
-fn start(
+fn startup(
     cluster: &Cluster,
     mut lock: lock::UnlockedFile,
 ) -> Result<lock::LockedFileShared, ClusterError> {
@@ -105,7 +105,7 @@ fn start(
     }
 }
 
-pub fn shutdown<F, T>(
+fn shutdown<F, T>(
     cluster: &Cluster,
     lock: lock::LockedFileShared,
     action: F,
