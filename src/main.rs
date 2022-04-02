@@ -44,7 +44,8 @@ fn parse_args() -> clap::ArgMatches<'static> {
                         .help(concat!(
                             "The directory in which to place, or find, the cluster. The default ",
                             "is taken from the PGDATA environment variable. If that is not set, ",
-                            "the cluster will be created in a directory named 'cluster'."))
+                            "the cluster will be created in a directory named 'cluster'. It will ",
+                            "NOT be destroyed when this command exits."))
                         .short("D")
                         .long("datadir")
                         .value_name("PGDATA")

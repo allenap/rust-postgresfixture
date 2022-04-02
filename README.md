@@ -44,11 +44,7 @@ SUBCOMMANDS:
 Based on the Python postgresfixture library <https://pypi.python.org/pypi/postgresfixture>.
 
 $ postgresfixture shell
-data=# select
-untaunting-paxton
-
-$ petname -s _ -w 3
-suitably_overdelicate_jamee
+data=# select …
 ```
 
 ## Use as a library
