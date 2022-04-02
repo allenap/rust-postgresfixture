@@ -29,7 +29,7 @@ nix = "^0.23.0"
 postgres = "^0.19.2"
 rand = "0.8.5"
 regex = "^1.5.4"
-shell-escape = "^0.1.5"
+shell-quote = "^0.3.0"
 uuid = {version = "^0.8.2", features = ["v5"]}
 
 [dev-dependencies]

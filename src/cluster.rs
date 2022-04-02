@@ -1,11 +1,13 @@
 //! Create, start, introspect, stop, and destroy PostgreSQL clusters.
 
+use std::ffi::OsString;
+use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 use std::{env, error, fmt, fs, io};
 
 use nix::errno::Errno;
-use shell_escape::escape;
+use shell_quote::sh::escape_into;
 
 use crate::runtime;
 
@@ -267,28 +269,6 @@ impl Cluster {
             // We didn't start this cluster; say so.
             return Ok(false);
         }
-        // This next thing is a wart of the `shell-escape` crate. UNIX paths are
-        // bytes and the only thing they're not allowed to contain is, as far as
-        // I know, the null byte. The encoding is defined by the locale.
-        //
-        // Now, the `shell-escape` crate only understands `&str` so we have to
-        // convert a platform-specific path string to a UTF-8 string before
-        // passing it to `shell-escape`.
-        //
-        // Cargo, a notable codebase that uses `shell-escape`, sidesteps this
-        // limitation: it only uses `shell-escape` with strings already assumed
-        // to be UTF-8. I'm choosing to be strict and reject any platform path
-        // that's not also valid UTF-8.
-        //
-        // Why do we need `shell-escape`? One of the arguments we will pass to
-        // `pg_ctl` will be used as the argument _list_ when it invokes
-        // `postgres`. Sucks, but there it is.
-        let datadir = self
-            .datadir
-            .as_path()
-            .as_os_str()
-            .to_str()
-            .ok_or(ClusterError::PathEncodingError)?;
         // Next, invoke `pg_ctl` to start the cluster.
         // pg_ctl options:
         //  -l <file> -- log file.
@@ -305,7 +285,11 @@ impl Cluster {
             .arg("-s")
             .arg("-w")
             .arg("-o")
-            .arg(format!("-h '' -F -k {}", escape(datadir.into())))
+            .arg({
+                let mut arg = b"-h '' -F -k "[..].into();
+                escape_into(&self.datadir, &mut arg);
+                OsString::from_vec(arg)
+            })
             .output()?;
         // We did actually start the cluster; say so.
         Ok(true)
