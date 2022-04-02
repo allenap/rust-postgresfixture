@@ -87,7 +87,7 @@ fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
     // For now use the default PostgreSQL runtime.
     let cluster = postgresfixture::Cluster::new(&database_dir, postgresfixture::Runtime::default());
 
-    postgresfixture::run(&cluster, lock, || {
+    postgresfixture::run_and_stop(&cluster, lock, || {
         if !cluster
             .databases()
             .expect("could not list databases")

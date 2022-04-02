@@ -19,5 +19,5 @@ mod util;
 mod version;
 
 pub use cluster::{Cluster, ClusterError};
-pub use coordinate::run;
+pub use coordinate::{run_and_destroy, run_and_stop};
 pub use runtime::Runtime;
