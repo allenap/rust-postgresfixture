@@ -6,18 +6,15 @@
 //!
 //! ```rust
 //! let data_dir = tempdir::TempDir::new("data").unwrap();
-//! let runtime = postgresfixture::Runtime::default();
-//! let cluster = postgresfixture::Cluster::new(&data_dir, runtime);
+//! let runtime = postgresfixture::runtime::Runtime::default();
+//! let cluster = postgresfixture::cluster::Cluster::new(&data_dir, runtime);
 //! ```
 //!
 
-mod cluster;
-mod coordinate;
+pub mod cluster;
+pub mod coordinate;
 pub mod lock;
-mod runtime;
-mod util;
-mod version;
+pub mod runtime;
+pub mod version;
 
-pub use cluster::{Cluster, ClusterError};
-pub use coordinate::{run_and_destroy, run_and_stop};
-pub use runtime::Runtime;
+mod util;

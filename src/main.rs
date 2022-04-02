@@ -7,7 +7,7 @@ use std::io;
 use std::path::PathBuf;
 use std::process::exit;
 
-use postgresfixture::lock::UnlockedFile;
+use postgresfixture::{cluster, coordinate, lock, runtime};
 
 fn main() {
     exit(match parse_args().subcommand() {
@@ -82,12 +82,13 @@ fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
     // Use the canonical path to construct the UUID with which we'll lock this
     // cluster. Use the `Debug` form of `database_dir` for the lock file UUID.
     let lock_uuid = uuid::Uuid::new_v5(&UUID_NS, format!("{:?}", &database_dir).as_bytes());
-    let lock = UnlockedFile::try_from(&lock_uuid).expect("could not create lock file");
+    let lock = lock::UnlockedFile::try_from(&lock_uuid).expect("could not create lock file");
 
     // For now use the default PostgreSQL runtime.
-    let cluster = postgresfixture::Cluster::new(&database_dir, postgresfixture::Runtime::default());
+    let runtime = runtime::Runtime::default();
+    let cluster = cluster::Cluster::new(&database_dir, runtime);
 
-    postgresfixture::run_and_stop(&cluster, lock, || {
+    coordinate::run_and_stop(&cluster, lock, || {
         if !cluster
             .databases()
             .expect("could not list databases")

@@ -3,8 +3,8 @@ use std::time::Duration;
 use either::Either::{Left, Right};
 use rand::RngCore;
 
+use crate::cluster::{Cluster, ClusterError};
 use crate::lock;
-use crate::{Cluster, ClusterError};
 
 pub fn run_and_stop<F, T>(
     cluster: &Cluster,
