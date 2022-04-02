@@ -1,21 +1,22 @@
 # rust-postgresfixture
 
 A [Rust](https://www.rust-lang.org/) library and command-line tool for creating
-short-lived PostgreSQL clusters and databases, especially useful for testing and
-development.
+standalone PostgreSQL clusters and databases, useful for experimentation,
+development, and testing.
 
 It's based on the Python [postgresfixture][] library which saw heavy use in
 [MAAS](https://maas.io/). That was (and is) a useful tool when experimenting
 with PostgreSQL. For example we could use it to bring up a cluster to run a
-development server, but it came into its own in MAAS's test suites, and was key
-to [making MAAS's test suites faster][maas-faster-tests].
+development server. However, it came into its own in MAAS's test suites, and was
+key to [making MAAS's test suites faster][maas-faster-tests].
 
 [postgresfixture]: https://pypi.python.org/pypi/postgresfixture
 [maas-faster-tests]: https://allenap.me/post/the-way-to-run-tests-quickly-in-maas/
 
-This started out as a straightforward port, but it's starting to deviate from
-the design of its Python counterpart. I'm not sure exactly where it will end up
-yet, but it will at least support the same use cases, albeit in its own way.
+This Rust version started out as a straightforward port but it has deviated
+significantly from the design of its Python counterpart. I'm not sure exactly
+where it will end up yet, but it will at least support the same use cases,
+albeit in its own way.
 
 ## Command-line utility
 
@@ -59,16 +60,15 @@ few older versions that are not supported upstream).
 
 ```rust
 let data_dir = tempdir::TempDir::new("data").unwrap();
-let runtime = postgresfixture::Runtime::default();
-let cluster = postgresfixture::Cluster::new(&data_dir, runtime);
+let runtime = postgresfixture::runtime::Runtime::default();
+let cluster = postgresfixture::cluster::Cluster::new(&data_dir, runtime);
 ```
 
 ## Contributing
 
-This code is **beta** quality. Some things will likely change, like the [locking
-scheme](https://github.com/allenap/rust-postgresfixture/issues/34), before
-version 1.0, but that's unlikely to cause API breakage. If you feel the urge to
-hack on this code, here's how to get started:
+This code is **alpha** quality. Many things will likely change before version
+1.0, and that may cause API breakage. If you feel the urge to hack on this code,
+here's how to get started:
 
 - [Install cargo][install-cargo],
 - Clone this repository,

@@ -1,3 +1,14 @@
+//! Parse PostgreSQL version numbers.
+//!
+//! ```rust
+//! # use postgresfixture::version::Version;
+//! assert_eq!(Ok(Version { major: 9, minor: 6, patch: Some(17) }), "9.6.17".parse());
+//! assert_eq!(Ok(Version { major: 14, minor: 6, patch: None}), "14.6".parse());
+//! ```
+//!
+//! See <https://www.postgresql.org/support/versioning/> for information on
+//! PostgreSQL's versioning scheme.
+
 use std::str::FromStr;
 use std::{error, fmt, io, num};
 
@@ -138,16 +149,16 @@ mod tests {
 
     fn vp(major: u32, minor: u32, patch: u32) -> Version {
         Version {
-            major: major,
-            minor: minor,
+            major,
+            minor,
             patch: Some(patch),
         }
     }
 
     fn v(major: u32, minor: u32) -> Version {
         Version {
-            major: major,
-            minor: minor,
+            major,
+            minor,
             patch: None,
         }
     }
