@@ -1,69 +1,22 @@
-#[macro_use]
-extern crate clap;
+mod cli;
 
-use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::process::exit;
 
+use clap::Parser;
+
 use postgresfixture::{cluster, coordinate, lock, runtime};
 
 fn main() {
-    exit(match parse_args().subcommand() {
-        ("shell", Some(args)) => {
-            let database_dir: PathBuf = args.value_of("database-dir").unwrap().into();
-            let database_name: String = args.value_of("database-name").unwrap().into();
-            shell(database_dir, &database_name)
-        }
-        (command, _) => {
-            unreachable!("subcommand branch for {:?} is missing", command);
-        }
+    let cli = cli::Cli::parse();
+    exit(match cli.command {
+        cli::Commands::Shell {
+            database_dir,
+            database_name,
+        } => shell(database_dir, &database_name),
     });
-}
-
-/// Parse command-line arguments.
-fn parse_args() -> clap::ArgMatches<'static> {
-    use clap::{App, AppSettings, Arg, SubCommand};
-    App::new("rust-postgresfixture")
-        .setting(AppSettings::DisableHelpSubcommand)
-        .setting(AppSettings::SubcommandRequired)
-        .setting(AppSettings::VersionlessSubcommands)
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about("Work with ephemeral PostgreSQL clusters.")
-        .after_help(concat!(
-            "Based on the Python postgresfixture library ",
-            "<https://pypi.python.org/pypi/postgresfixture>."
-        ))
-        .subcommand(
-            SubCommand::with_name("shell")
-                .about("Start a psql shell, creating and starting the cluster as necessary.")
-                .arg(
-                    Arg::with_name("database-dir")
-                        .help(concat!(
-                            "The directory in which to place, or find, the cluster. The default ",
-                            "is taken from the PGDATA environment variable. If that is not set, ",
-                            "the cluster will be created in a directory named 'cluster'. It will ",
-                            "NOT be destroyed when this command exits."))
-                        .short("D")
-                        .long("datadir")
-                        .value_name("PGDATA")
-                        .default_value("cluster")
-                        .env("PGDATA"),
-                )
-                .arg(
-                    Arg::with_name("database-name")
-                        .help(concat!(
-                            "The database to connect to. The default is taken from the PGDATABASE ",
-                            "environment variable. If that is not set, a database named 'data' will ",
-                            "be created."))
-                        .value_name("PGDATABASE")
-                        .default_value("data")
-                        .env("PGDATABASE"),
-                ),
-        )
-        .get_matches()
 }
 
 const UUID_NS: uuid::Uuid = uuid::Uuid::from_u128(93875103436633470414348750305797058811);
