@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 
 /// Work with ephemeral PostgreSQL clusters.
 #[derive(Parser)]
-#[clap(author, version, about, long_about = None, propagate_version = true)]
+#[clap(author, version, about, long_about = None)]
 pub struct Cli {
     #[clap(subcommand)]
     pub command: Commands,
