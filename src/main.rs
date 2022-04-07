@@ -13,18 +13,28 @@ use postgresfixture::{cluster, coordinate, lock, runtime};
 fn main() {
     let cli = cli::Cli::parse();
     exit(match cli.command {
-        cli::Commands::Shell(database) => shell(database.dir, &database.name),
+        cli::Commands::Shell {
+            database,
+            lifecycle,
+        } => shell(database.dir, &database.name, lifecycle.destroy),
         cli::Commands::Exec {
             database,
             command,
             args,
-        } => exec(database.dir, &database.name, command, &args),
+            lifecycle,
+        } => exec(
+            database.dir,
+            &database.name,
+            command,
+            &args,
+            lifecycle.destroy,
+        ),
     });
 }
 
 const UUID_NS: uuid::Uuid = uuid::Uuid::from_u128(93875103436633470414348750305797058811);
 
-fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
+fn shell(database_dir: PathBuf, database_name: &str, destroy: bool) -> i32 {
     // Create the cluster directory first.
     match fs::create_dir(&database_dir) {
         Err(err) if err.kind() == io::ErrorKind::AlreadyExists => (),
@@ -45,7 +55,13 @@ fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
     let runtime = runtime::Runtime::default();
     let cluster = cluster::Cluster::new(&database_dir, runtime);
 
-    coordinate::run_and_stop(&cluster, lock, || {
+    let runner = if destroy {
+        coordinate::run_and_destroy
+    } else {
+        coordinate::run_and_stop
+    };
+
+    runner(&cluster, lock, || {
         if !cluster
             .databases()
             .expect("could not list databases")
@@ -71,6 +87,7 @@ fn exec<T: AsRef<OsStr>>(
     database_name: &str,
     command: T,
     args: &[T],
+    destroy: bool,
 ) -> i32 {
     // Create the cluster directory first.
     match fs::create_dir(&database_dir) {
@@ -92,7 +109,13 @@ fn exec<T: AsRef<OsStr>>(
     let runtime = runtime::Runtime::default();
     let cluster = cluster::Cluster::new(&database_dir, runtime);
 
-    coordinate::run_and_stop(&cluster, lock, || {
+    let runner = if destroy {
+        coordinate::run_and_destroy
+    } else {
+        coordinate::run_and_stop
+    };
+
+    runner(&cluster, lock, || {
         if !cluster
             .databases()
             .expect("could not list databases")
