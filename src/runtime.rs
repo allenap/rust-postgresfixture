@@ -73,11 +73,39 @@ impl Runtime {
     /// # use postgresfixture::runtime::Runtime;
     /// let version = Runtime::default().execute("pg_ctl").arg("--version").output().unwrap();
     /// ```
-    pub fn execute(&self, program: &str) -> Command {
+    pub fn execute<T: AsRef<OsStr>>(&self, program: T) -> Command {
         let mut command;
         match self.bindir {
             Some(ref bindir) => {
-                command = Command::new(bindir.join(program));
+                command = Command::new(bindir.join(program.as_ref()));
+                // For now, panic if we can't manipulate PATH.
+                // TODO: Print warning if this fails.
+                command.env(
+                    "PATH",
+                    util::prepend_to_path(bindir, env::var_os("PATH")).unwrap(),
+                );
+            }
+            None => {
+                command = Command::new(program);
+            }
+        }
+        command
+    }
+
+    /// Return a [`Command`] prepped to run the given `program` with this
+    /// PostgreSQL runtime at the front of `PATH`. This is very similar to
+    /// [`execute`] except it does not qualify the given program name with this
+    /// runtime's `bindir`.
+    ///
+    /// ```rust
+    /// # use postgresfixture::runtime::Runtime;
+    /// let version = Runtime::default().command("bash").arg("-c").arg("echo hello").output().unwrap();
+    /// ```
+    pub fn command<T: AsRef<OsStr>>(&self, program: T) -> Command {
+        let mut command;
+        match self.bindir {
+            Some(ref bindir) => {
+                command = Command::new(program);
                 // For now, panic if we can't manipulate PATH.
                 // TODO: Print warning if this fails.
                 command.env(
