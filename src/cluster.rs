@@ -1,6 +1,6 @@
 //! Create, start, introspect, stop, and destroy PostgreSQL clusters.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
@@ -309,9 +309,24 @@ impl Cluster {
 
     pub fn shell(&self, database: &str) -> Result<ExitStatus, ClusterError> {
         let mut command = self.runtime.execute("psql");
-        command.arg("--quiet").arg("--").arg(database);
+        command.arg("--quiet");
         command.env("PGDATA", &self.datadir);
         command.env("PGHOST", &self.datadir);
+        command.env("PGDATABASE", database);
+        Ok(command.spawn()?.wait()?)
+    }
+
+    pub fn exec<T: AsRef<OsStr>>(
+        &self,
+        database: &str,
+        command: T,
+        args: &[T],
+    ) -> Result<ExitStatus, ClusterError> {
+        let mut command = self.runtime.command(command);
+        command.args(args);
+        command.env("PGDATA", &self.datadir);
+        command.env("PGHOST", &self.datadir);
+        command.env("PGDATABASE", database);
         Ok(command.spawn()?.wait()?)
     }
 
