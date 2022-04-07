@@ -13,8 +13,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Start a psql shell, creating and starting the cluster as necessary. The
-    /// cluster will NOT be destroyed when this command exits.
+    /// Start a psql shell, creating and starting the cluster as necessary.
     #[clap(display_order = 1)]
     Shell {
         #[clap(flatten)]
@@ -25,7 +24,7 @@ pub enum Commands {
     },
 
     /// Execute an arbitrary command, creating and starting the cluster as
-    /// necessary. The cluster will NOT be destroyed when this command exits.
+    /// necessary.
     #[clap(display_order = 2)]
     Exec {
         #[clap(flatten)]
@@ -70,7 +69,8 @@ pub struct DatabaseArgs {
 }
 #[derive(Args)]
 pub struct LifecycleArgs {
-    /// Destroy the cluster after use. WARNING: This will DELETE THE DATA DIRECTORY.
+    /// Destroy the cluster after use. WARNING: This will DELETE THE DATA
+    /// DIRECTORY. The default is to NOT destroy the cluster.
     #[clap(long = "destroy", display_order = 100)]
     pub destroy: bool,
 }
