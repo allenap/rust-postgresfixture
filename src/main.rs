@@ -55,6 +55,10 @@ fn shell(database_dir: PathBuf, database_name: &str) -> i32 {
                 .createdb(database_name)
                 .expect("could not create database");
         }
+        // Ignore SIGINT, TERM, and HUP (with ctrlc feature "termination"). The
+        // child process will receive the signal, presumably terminate, then
+        // we'll tidy up.
+        ctrlc::set_handler(|| ()).expect("could not set signal handler");
         cluster.shell(database_name).expect("shell failed");
     })
     .unwrap();
@@ -98,9 +102,13 @@ fn exec<T: AsRef<OsStr>>(
                 .createdb(database_name)
                 .expect("could not create database");
         }
+        // Ignore SIGINT, TERM, and HUP (with ctrlc feature "termination"). The
+        // child process will receive the signal, presumably terminate, then
+        // we'll tidy up.
+        ctrlc::set_handler(|| ()).expect("could not set signal handler");
         cluster
             .exec(database_name, command, args)
-            .expect("shell failed");
+            .expect("exec failed");
     })
     .unwrap();
 
