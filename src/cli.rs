@@ -16,7 +16,13 @@ pub enum Commands {
     /// Start a psql shell, creating and starting the cluster as necessary. The
     /// cluster will NOT be destroyed when this command exits.
     #[clap(display_order = 1)]
-    Shell(DatabaseArgs),
+    Shell {
+        #[clap(flatten)]
+        database: DatabaseArgs,
+
+        #[clap(flatten)]
+        lifecycle: LifecycleArgs,
+    },
 
     /// Execute an arbitrary command, creating and starting the cluster as
     /// necessary. The cluster will NOT be destroyed when this command exits.
@@ -24,6 +30,9 @@ pub enum Commands {
     Exec {
         #[clap(flatten)]
         database: DatabaseArgs,
+
+        #[clap(flatten)]
+        lifecycle: LifecycleArgs,
 
         /// The executable to invoke. By default it will start a shell.
         #[clap(env = "SHELL", value_name = "COMMAND")]
@@ -58,4 +67,10 @@ pub struct DatabaseArgs {
         display_order = 2
     )]
     pub name: String,
+}
+#[derive(Args)]
+pub struct LifecycleArgs {
+    /// Destroy the cluster after use. WARNING: This will DELETE THE DATA DIRECTORY.
+    #[clap(long = "destroy", display_order = 100)]
+    pub destroy: bool,
 }
