@@ -14,7 +14,7 @@ use std::{error, fmt, io, num};
 
 use regex::Regex;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
