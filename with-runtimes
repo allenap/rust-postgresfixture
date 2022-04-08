@@ -3,18 +3,21 @@
 # Debian/Ubuntu.
 if [[ -d /usr/lib/postgresql ]]
 then
-    export PATH="$(printf '%s:' /usr/lib/postgresql/*/bin):$PATH"
-fi
+    PATH="$(printf '%s:' /usr/lib/postgresql/*/bin):$PATH"
 
 # Homebrew.
-if [[ -d /usr/local/Cellar ]]
+elif [[ -d /usr/local/Cellar ]]
 then
     # The most recent version of PostgreSQL – typically installed by the
     # `postgresql` formula – links `pg_ctl` et al. into `/usr/local/bin`, and
     # has a Cellar path of `/usr/local/Cellar/postgresql` (note: no @version).
     # We specifically do not match it here otherwise it'll be discovered twice
     # and tests will take longer.
-    export PATH="$(printf '%s:' /usr/local/Cellar/postgresql@*/*/bin):$PATH"
+    PATH="$(printf '%s:' /usr/local/Cellar/postgresql@*/*/bin):$PATH"
 fi
 
-exec cargo test "$@"
+# Make sure it's exported. It really should be, but let's be super sure.
+export PATH
+
+# Execute whatever we got passed in.
+exec "$@"
