@@ -3,20 +3,28 @@ mod cli;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::process::exit;
+use std::process::{exit, ExitStatus};
 
 use clap::Parser;
+use color_eyre::eyre::{bail, Result, WrapErr};
+use color_eyre::{Help, SectionExt};
 
 use postgresfixture::{cluster, coordinate, lock, runtime};
 
-fn main() {
+fn main() -> Result<()> {
+    color_eyre::install()?;
+
     let cli = cli::Cli::parse();
-    match cli.command {
+    let result = match cli.command {
         cli::Commands::Shell {
             database,
             lifecycle,
         } => run(database.dir, &database.name, lifecycle.destroy, |cluster| {
-            cluster.shell(&database.name).expect("shell failed")
+            check_exit(
+                cluster
+                    .shell(&database.name)
+                    .wrap_err("Starting PostgreSQL shell in cluster failed")?,
+            )
         }),
         cli::Commands::Exec {
             database,
@@ -24,35 +32,54 @@ fn main() {
             args,
             lifecycle,
         } => run(database.dir, &database.name, lifecycle.destroy, |cluster| {
-            cluster
-                .exec(&database.name, command, &args)
-                .expect("exec failed")
+            check_exit(
+                cluster
+                    .exec(&database.name, command, &args)
+                    .wrap_err("Executing command in cluster failed")?,
+            )
         }),
     };
-    exit(0);
+
+    match result {
+        Ok(code) => exit(code),
+        Err(report) => Err(report),
+    }
+}
+
+fn check_exit(status: ExitStatus) -> Result<i32> {
+    match status.code() {
+        Some(code) => Ok(code),
+        None => bail!("Command terminated: {status}"),
+    }
 }
 
 const UUID_NS: uuid::Uuid = uuid::Uuid::from_u128(93875103436633470414348750305797058811);
 
-fn run<F, T>(database_dir: PathBuf, database_name: &str, destroy: bool, action: F) -> T
+fn run<F>(database_dir: PathBuf, database_name: &str, destroy: bool, action: F) -> Result<i32>
 where
-    F: FnOnce(&cluster::Cluster) -> T,
+    F: FnOnce(&cluster::Cluster) -> Result<i32>,
 {
     // Create the cluster directory first.
     match fs::create_dir(&database_dir) {
         Err(err) if err.kind() == io::ErrorKind::AlreadyExists => (),
-        other => other.expect("could not create database directory"),
+        err @ Err(_) => err
+            .wrap_err("Could not create database directory")
+            .with_section(|| format!("{}", database_dir.display()).header("Database directory:"))?,
+        _ => (),
     };
 
     // Obtain a canonical path to the cluster directory.
     let database_dir = database_dir
         .canonicalize()
-        .expect("could not canonicalize database directory");
+        .wrap_err("Could not canonicalize database directory")
+        .with_section(|| format!("{}", database_dir.display()).header("Database directory:"))?;
 
     // Use the canonical path to construct the UUID with which we'll lock this
     // cluster. Use the `Debug` form of `database_dir` for the lock file UUID.
     let lock_uuid = uuid::Uuid::new_v5(&UUID_NS, format!("{:?}", &database_dir).as_bytes());
-    let lock = lock::UnlockedFile::try_from(&lock_uuid).expect("could not create lock file");
+    let lock = lock::UnlockedFile::try_from(&lock_uuid)
+        .wrap_err("Could not create UUID-based lock file")
+        .with_section(|| lock_uuid.to_string().header("UUID for lock file:"))?;
 
     // For now use the default PostgreSQL runtime.
     let runtime = runtime::Runtime::default();
@@ -67,21 +94,21 @@ where
     runner(&cluster, lock, || {
         if !cluster
             .databases()
-            .expect("could not list databases")
+            .wrap_err("Could not list databases")?
             .contains(&database_name.to_string())
         {
             cluster
                 .createdb(database_name)
-                .expect("could not create database");
+                .wrap_err("Could not create database")
+                .with_section(|| database_name.to_owned().header("Database:"))?;
         }
 
         // Ignore SIGINT, TERM, and HUP (with ctrlc feature "termination"). The
         // child process will receive the signal, presumably terminate, then
         // we'll tidy up.
-        ctrlc::set_handler(|| ()).expect("could not set signal handler");
+        ctrlc::set_handler(|| ()).wrap_err("Could not set signal handler")?;
 
         // Finally, run the given action.
         action(&cluster)
-    })
-    .unwrap()
+    })?
 }
