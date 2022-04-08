@@ -20,7 +20,7 @@ pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.
     ///
-    /// Can be omitted (i.e. `None`) to search `PATH` only.
+    /// Can be omitted (i.e. [`None`]) to search `PATH` only.
     pub bindir: Option<PathBuf>,
 }
 
@@ -94,8 +94,8 @@ impl Runtime {
 
     /// Return a [`Command`] prepped to run the given `program` with this
     /// PostgreSQL runtime at the front of `PATH`. This is very similar to
-    /// [`execute`] except it does not qualify the given program name with this
-    /// runtime's `bindir`.
+    /// [`Self::execute`] except it does not qualify the given program name with
+    /// [`Self::bindir`].
     ///
     /// ```rust
     /// # use postgresfixture::runtime::Runtime;
