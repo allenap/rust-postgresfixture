@@ -11,9 +11,8 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub use crate::version::{Version, VersionError};
-
 use crate::util;
+use crate::version::{Version, VersionError};
 
 #[derive(Debug, Default)]
 pub struct Runtime {

@@ -14,7 +14,7 @@ use std::{error, fmt, io, num};
 
 use regex::Regex;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
@@ -24,8 +24,8 @@ pub struct Version {
 impl fmt::Display for Version {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self.patch {
-            Some(patch) => write!(fmt, "{}.{}.{}", self.major, self.minor, patch),
-            None => write!(fmt, "{}.{}", self.major, self.minor),
+            Some(patch) => fmt.pad(&format!("{}.{}.{}", self.major, self.minor, patch)),
+            None => fmt.pad(&format!("{}.{}", self.major, self.minor)),
         }
     }
 }

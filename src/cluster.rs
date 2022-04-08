@@ -10,14 +10,15 @@ use nix::errno::Errno;
 use shell_quote::sh::escape_into;
 
 use crate::runtime;
+use crate::version;
 
 #[derive(Debug)]
 pub enum ClusterError {
     PathEncodingError, // Path is not UTF-8.
     IoError(io::Error),
     UnixError(nix::Error),
-    UnsupportedVersion(runtime::Version),
-    UnknownVersion(runtime::VersionError),
+    UnsupportedVersion(version::Version),
+    UnknownVersion(version::VersionError),
     DatabaseError(postgres::error::Error),
     InUse, // Cluster is already in use; cannot lock exclusively.
     Other(Output),
@@ -66,8 +67,8 @@ impl From<nix::Error> for ClusterError {
     }
 }
 
-impl From<runtime::VersionError> for ClusterError {
-    fn from(error: runtime::VersionError) -> ClusterError {
+impl From<version::VersionError> for ClusterError {
+    fn from(error: version::VersionError) -> ClusterError {
         ClusterError::UnknownVersion(error)
     }
 }

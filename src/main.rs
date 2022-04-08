@@ -2,6 +2,7 @@ mod cli;
 
 use std::fs;
 use std::io;
+use std::iter;
 use std::path::PathBuf;
 use std::process::{exit, ExitStatus};
 
@@ -38,6 +39,33 @@ fn main() -> Result<()> {
                     .wrap_err("Executing command in cluster failed")?,
             )
         }),
+        cli::Commands::Runtimes => {
+            let runtimes_on_path = runtime::Runtime::find_on_path();
+
+            // Get version for each runtime. Throw away errors.
+            let mut runtimes: Vec<_> = runtimes_on_path
+                .iter()
+                .zip(iter::once(true).chain(iter::repeat(false)))
+                .filter_map(|(runtime, default)| match runtime.version() {
+                    Ok(version) => Some((version, runtime, default)),
+                    Err(_) => None,
+                })
+                .collect();
+
+            // Sort by version. Higher versions will sort last.
+            runtimes.sort_by(|(v1, ..), (v2, ..)| v1.cmp(v2));
+
+            for (version, runtime, default) in runtimes {
+                let default = if default { "=>" } else { "" };
+                match runtime.bindir {
+                    Some(ref path) => {
+                        println!("{default:2} {version:10} {path}", path = path.display())
+                    }
+                    None => println!("{default:2} {version:10?} <???>",),
+                }
+            }
+            Ok(0)
+        }
     };
 
     match result {
