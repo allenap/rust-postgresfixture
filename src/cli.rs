@@ -41,6 +41,10 @@ pub enum Commands {
         #[clap(value_name = "ARGUMENTS")]
         args: Vec<OsString>,
     },
+
+    /// List PostgreSQL runtimes discovered on PATH.
+    #[clap(display_order = 3)]
+    Runtimes,
 }
 
 #[derive(Args)]
