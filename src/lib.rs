@@ -6,19 +6,17 @@
 //!
 //! ```rust
 //! # use postgresfixture::{cluster, runtime};
-//! let data_dir = tempdir::TempDir::new("data")?;
-//! let runtime = runtime::Runtime::default();
-//! let cluster = cluster::Cluster::new(&data_dir, runtime);
-//! cluster.start()?;
-//! assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
-//! let mut conn = cluster.connect("template1")?;
-//! let rows = conn.query(
-//!   "SELECT character_set_name FROM information_schema.character_sets",
-//!   &[],
-//! )?;
-//! let collations: Vec<String> = rows.iter().map(|row| row.get(0)).collect();
-//! assert_eq!(collations, vec!["UTF8"]);
-//! cluster.stop()?;
+//! for runtime in runtime::Runtime::find_on_path() {
+//!   let data_dir = tempdir::TempDir::new("data")?;
+//!   let cluster = cluster::Cluster::new(&data_dir, runtime);
+//!   cluster.start()?;
+//!   assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
+//!   let mut conn = cluster.connect("template1")?;
+//!   let rows = conn.query("SELECT 1234 -- …", &[])?;
+//!   let collations: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
+//!   assert_eq!(collations, vec![1234]);
+//!   cluster.stop()?;
+//! }
 //! # Ok::<(), cluster::ClusterError>(())
 //! ```
 //!
