@@ -12,6 +12,10 @@
 //! ```
 //!
 
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct README;
+
 pub mod cluster;
 pub mod coordinate;
 pub mod lock;

@@ -55,9 +55,13 @@ run, and destroy PostgreSQL clusters of any officially supported version (and a
 few older versions that are not supported upstream).
 
 ```rust
-let data_dir = tempdir::TempDir::new("data").unwrap();
+let data_dir = tempdir::TempDir::new("data")?;
 let runtime = postgresfixture::runtime::Runtime::default();
 let cluster = postgresfixture::cluster::Cluster::new(&data_dir, runtime);
+cluster.start()?;
+assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
+cluster.stop()?;
+# Ok::<(), postgresfixture::cluster::ClusterError>(())
 ```
 
 ## Contributing

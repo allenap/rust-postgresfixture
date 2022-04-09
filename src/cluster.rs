@@ -334,7 +334,10 @@ impl Cluster {
     // The names of databases in this cluster.
     pub fn databases(&self) -> Result<Vec<String>, ClusterError> {
         let mut conn = self.connect("template1")?;
-        let rows = conn.query("SELECT datname FROM pg_catalog.pg_database", &[])?;
+        let rows = conn.query(
+            "SELECT datname FROM pg_catalog.pg_database ORDER BY datname",
+            &[],
+        )?;
         let datnames: Vec<String> = rows.iter().map(|row| row.get(0)).collect();
         Ok(datnames)
     }
