@@ -14,61 +14,99 @@ key to [making MAAS's test suites faster][maas-faster-tests].
 [maas-faster-tests]: https://allenap.me/post/the-way-to-run-tests-quickly-in-maas/
 
 This Rust version started out as a straightforward port but it has deviated
-significantly from the design of its Python counterpart. I'm not sure exactly
-where it will end up yet, but it will at least support the same use cases,
-albeit in its own way.
+significantly from the design of its Python counterpart.
+
+This code works and seems to be reliable, but the command-line and API may
+change before 1.0, potentially causing breakage. If this is a problem I suggest
+pinning on a specific version and checking back once in a while to see if it can
+be upgraded, or use something automated like [Dependabot][dependabot].
+
+[dependabot]: https://github.com/dependabot
 
 ## Command-line utility
 
-If you have [installed Cargo][install-cargo], you can install
-rust-postgresfixture with `cargo install postgresfixture`. This puts a
-`postgresfixture` binary in `~/.cargo/bin`, which the Cargo installation process
-will probably have added to your `PATH`.
+After [installing Cargo][install-cargo], `cargo install postgresfixture` will
+install a `postgresfixture` binary in `~/.cargo/bin`, which the Cargo
+installation process will probably have added to your `PATH`.
+
+**Note** that this tool does _not_ come with any PostgreSQL runtimes. You must
+install these yourself and add their `bin` directories to `PATH`. To select a
+specific runtime you must set `PATH` such that the runtime you want to use is
+before any others. The `runtimes` subcommand can show you what is available and
+what runtime will actually be used.
 
 ```shellsession
 $ postgresfixture --help
-rust-postgresfixture 0.2.4
+postgresfixture 0.2.4
 Gavin Panella <gavinpanella@gmail.com>
-Work with ephemeral PostgreSQL clusters.
+Easily create and manage PostgreSQL clusters on demand for testing and development.
 
 USAGE:
     postgresfixture <SUBCOMMAND>
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+OPTIONS:
+    -h, --help       Print help information
+    -V, --version    Print version information
 
 SUBCOMMANDS:
-    shell    Start a psql shell, creating and starting the cluster as necessary.
+    shell       Start a psql shell, creating and starting the cluster as necessary
+    exec        Execute an arbitrary command, creating and starting the cluster as necessary
+    runtimes    List PostgreSQL runtimes discovered on PATH
+    help        Print this message or the help of the given subcommand(s)
 
-Based on the Python postgresfixture library <https://pypi.python.org/pypi/postgresfixture>.
+$ postgresfixture runtimes
+   9.4.26     /usr/local/Cellar/postgresql@9.4/9.4.26/bin
+   9.5.25     /usr/local/Cellar/postgresql@9.5/9.5.25/bin
+   10.20      /usr/local/Cellar/postgresql@10/10.20_1/bin
+   11.15      /usr/local/Cellar/postgresql@11/11.15_1/bin
+   12.10      /usr/local/Cellar/postgresql@12/12.10_1/bin
+   13.6       /usr/local/Cellar/postgresql@13/13.6_1/bin
+=> 14.2       /usr/local/bin
 
 $ postgresfixture shell
 data=# select …
+
+$ postgresfixture exec pg_dump
+--
+-- PostgreSQL database dump
+--
+…
 ```
 
 ## Use as a library
 
-The highest level functionality in this create is all in the `Cluster` struct
-and its implementation. This covers all the logic you need to safely create,
-run, and destroy PostgreSQL clusters of any officially supported version (and a
-few older versions that are not supported upstream).
+The essential functionality in this crate is in the `Cluster` struct and its
+implementation. This covers the logic you need to create, run, and destroy
+PostgreSQL clusters of any officially supported version (and a few older
+versions that are not supported upstream).
 
 ```rust
+# use postgresfixture::{cluster, runtime};
 let data_dir = tempdir::TempDir::new("data")?;
-let runtime = postgresfixture::runtime::Runtime::default();
-let cluster = postgresfixture::cluster::Cluster::new(&data_dir, runtime);
+let runtime = runtime::Runtime::default();
+let cluster = cluster::Cluster::new(&data_dir, runtime);
 cluster.start()?;
 assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
+let mut conn = cluster.connect("template1")?;
+let rows = conn.query(
+  "SELECT character_set_name FROM information_schema.character_sets",
+  &[],
+)?;
+let collations: Vec<String> = rows.iter().map(|row| row.get(0)).collect();
+assert_eq!(collations, vec!["UTF8"]);
 cluster.stop()?;
-# Ok::<(), postgresfixture::cluster::ClusterError>(())
+# Ok::<(), cluster::ClusterError>(())
 ```
+
+You may want to use this with the functions in the `coordinate` module like
+`run_and_stop` and `run_and_destroy`. These add locking to the setup and
+teardown steps of using a cluster so that multiple processes can safely share a
+single on-demand cluster.
 
 ## Contributing
 
-This code is **alpha** quality. Many things will likely change before version
-1.0, and that may cause API breakage. If you feel the urge to hack on this code,
-here's how to get started:
+If you feel the urge to hack on this code, here's
+how to get started:
 
 - [Install cargo][install-cargo],
 - Clone this repository,

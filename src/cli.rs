@@ -43,6 +43,8 @@ pub enum Commands {
     },
 
     /// List PostgreSQL runtimes discovered on PATH.
+    ///
+    /// The runtime shown on the line beginning with `=>` is the default.
     #[clap(display_order = 3)]
     Runtimes,
 }
