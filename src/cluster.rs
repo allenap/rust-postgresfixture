@@ -504,8 +504,9 @@ mod tests {
             //     -- https://www.postgresql.org/docs/9.4/release-9-4-22.html
             //
             if runtime.version().unwrap() < Version::from_str("9.4.22").unwrap() {
-                assert_eq!(params.get("TimeZone"), Some(&"UCT".into()));
-                assert_eq!(params.get("log_timezone"), Some(&"UCT".into()));
+                let dealias = |tz: &String| (if tz == "UCT" { "UTC" } else { tz }).to_owned();
+                assert_eq!(params.get("TimeZone").map(dealias), Some("UTC".into()));
+                assert_eq!(params.get("log_timezone").map(dealias), Some("UTC".into()));
             } else {
                 assert_eq!(params.get("TimeZone"), Some(&"UTC".into()));
                 assert_eq!(params.get("log_timezone"), Some(&"UTC".into()));
