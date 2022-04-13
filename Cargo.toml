@@ -8,7 +8,7 @@ license = "Apache-2.0"
 name = "postgresfixture"
 readme = "README.md"
 repository = "https://github.com/allenap/rust-postgresfixture"
-version = "0.3.1"
+version = "0.3.2"
 
 [badges]
 travis-ci = {repository = "allenap/rust-postgresfixture", branch = "master"}

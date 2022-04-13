@@ -37,7 +37,7 @@ what runtime will actually be used.
 
 ```shellsession
 $ postgresfixture --help
-postgresfixture 0.3.1
+postgresfixture 0.3.2
 Gavin Panella <gavinpanella@gmail.com>
 Easily create and manage PostgreSQL clusters on demand for testing and development.
 
