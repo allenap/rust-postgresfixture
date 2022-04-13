@@ -246,7 +246,8 @@ impl Cluster {
                     .arg("init")
                     .arg("-s")
                     .arg("-o")
-                    .arg("-E utf8 -A trust")
+                    .arg("-E utf8 --locale C -A trust")
+                    .env("TZ", "UTC")
                     .output()?;
                 Ok(true)
             }
@@ -475,6 +476,31 @@ mod tests {
             assert!(!cluster.exists());
             assert!(cluster.create().unwrap());
             assert!(cluster.exists());
+        }
+    }
+
+    #[test]
+    fn cluster_create_creates_cluster_with_neutral_locale_and_timezone() {
+        for runtime in Runtime::find_on_path() {
+            println!("{:?}", runtime);
+            let data_dir = tempdir::TempDir::new("data").unwrap();
+            let cluster = Cluster::new(&data_dir, runtime);
+            cluster.start().unwrap();
+            let mut conn = cluster.connect("postgres").unwrap();
+            let result = conn.query("SHOW ALL", &[]).unwrap();
+            let params: std::collections::HashMap<String, String> = result
+                .into_iter()
+                .map(|row| (row.get::<usize, String>(0), row.get::<usize, String>(1)))
+                .collect();
+            assert_eq!(params.get("TimeZone"), Some(&"UTC".into()));
+            assert_eq!(params.get("log_timezone"), Some(&"UTC".into()));
+            assert_eq!(params.get("lc_collate"), Some(&"C".into()));
+            assert_eq!(params.get("lc_ctype"), Some(&"C".into()));
+            assert_eq!(params.get("lc_messages"), Some(&"C".into()));
+            assert_eq!(params.get("lc_monetary"), Some(&"C".into()));
+            assert_eq!(params.get("lc_numeric"), Some(&"C".into()));
+            assert_eq!(params.get("lc_time"), Some(&"C".into()));
+            cluster.stop().unwrap();
         }
     }
 
