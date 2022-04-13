@@ -408,10 +408,12 @@ impl Cluster {
 mod tests {
     use super::Cluster;
     use crate::runtime::Runtime;
+    use crate::version::Version;
 
     use std::collections::HashSet;
     use std::fs::File;
     use std::path::{Path, PathBuf};
+    use std::str::FromStr;
 
     #[test]
     fn cluster_new() {
@@ -484,7 +486,7 @@ mod tests {
         for runtime in Runtime::find_on_path() {
             println!("{:?}", runtime);
             let data_dir = tempdir::TempDir::new("data").unwrap();
-            let cluster = Cluster::new(&data_dir, runtime);
+            let cluster = Cluster::new(&data_dir, runtime.clone());
             cluster.start().unwrap();
             let mut conn = cluster.connect("postgres").unwrap();
             let result = conn.query("SHOW ALL", &[]).unwrap();
@@ -492,8 +494,22 @@ mod tests {
                 .into_iter()
                 .map(|row| (row.get::<usize, String>(0), row.get::<usize, String>(1)))
                 .collect();
-            assert_eq!(params.get("TimeZone"), Some(&"UTC".into()));
-            assert_eq!(params.get("log_timezone"), Some(&"UTC".into()));
+            // PostgreSQL 9.4.22's release notes reveal:
+            //
+            //   Etc/UCT is now a backward-compatibility link to Etc/UTC,
+            //   instead of being a separate zone that generates the
+            //   abbreviation UCT, which nowadays is typically a typo.
+            //   PostgreSQL will still accept UCT as an input zone abbreviation,
+            //   but it won't output it.
+            //     -- https://www.postgresql.org/docs/9.4/release-9-4-22.html
+            //
+            if runtime.version().unwrap() < Version::from_str("9.4.22").unwrap() {
+                assert_eq!(params.get("TimeZone"), Some(&"UCT".into()));
+                assert_eq!(params.get("log_timezone"), Some(&"UCT".into()));
+            } else {
+                assert_eq!(params.get("TimeZone"), Some(&"UTC".into()));
+                assert_eq!(params.get("log_timezone"), Some(&"UTC".into()));
+            }
             assert_eq!(params.get("lc_collate"), Some(&"C".into()));
             assert_eq!(params.get("lc_ctype"), Some(&"C".into()));
             assert_eq!(params.get("lc_messages"), Some(&"C".into()));

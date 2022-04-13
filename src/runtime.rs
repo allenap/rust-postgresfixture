@@ -14,7 +14,7 @@ use std::process::Command;
 use crate::util;
 use crate::version::{Version, VersionError};
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.
