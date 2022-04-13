@@ -1,4 +1,4 @@
-name: rust-postgresfixture CI
+name: Build/CI
 
 on:
   push:
