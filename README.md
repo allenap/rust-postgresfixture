@@ -118,9 +118,16 @@ After installing the source (see above) run tests with: `cargo test`.
 
 **However**, it's important to test against multiple versions of PostgreSQL. The
 tests will look for all PostgreSQL runtimes on `PATH` and run tests for all of
-them. To make this easier, the [`test`](test) script will help find the runtimes
-and add them to `PATH`, but first you must install muliple versions of
-PostgreSQL on your machine. Read on for platform-specific notes.
+them.
+
+First you must install multiple versions of PostgreSQL on your machine. Read on
+for platform-specific notes. Once you've installed the versions you want, the
+[`with-runtimes`](with-runtimes) script may be able to automatically find them
+and add them to `PATH`:
+
+```shellsession
+$ ./with-runtimes cargo test
+```
 
 #### Debian & Ubuntu
 
@@ -129,6 +136,7 @@ From https://wiki.postgresql.org/wiki/Apt:
 ```shellsession
 $ sudo apt-get install -y postgresql-common
 $ sudo sh /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+$ sudo apt-get install -y postgresql-{9.{4,5,6},10,11,12,13}  # Adjust as necessary.
 ```
 
 #### macOS
@@ -137,7 +145,7 @@ Using [Homebrew](https://brew.sh/):
 
 ```shellsession
 $ brew install postgresql  # Latest version.
-$ brew install postgresql@{9.{4,5,6},10,11,12,13}  # Others; adjust as necessary.
+$ brew install postgresql@{9.{4,5,6},10,11,12,13}  # Adjust as necessary.
 ```
 
 ### Making a release
