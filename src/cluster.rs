@@ -116,6 +116,21 @@ impl Cluster {
         self.datadir.is_dir() && self.datadir.join("PG_VERSION").is_file()
     }
 
+    /// Returns the PostgreSQL version in use by a cluster.
+    ///
+    /// This returns the version from the file named `PG_VERSION` in the data
+    /// directory if it exists, otherwise this returns `None`. For PostgreSQL
+    /// versions before 10 this is typically (maybe always) the major and minor
+    /// version, e.g. 9.4 rather than 9.4.26. For version 10 and above it
+    /// appears to be just the major number, e.g. 14 rather than 14.2.
+    pub fn version(&self) -> Option<String> {
+        let version_file = self.datadir.join("PG_VERSION");
+        match std::fs::read_to_string(version_file) {
+            Ok(version) => Some(version.trim().to_owned()),
+            Err(_) => None,
+        }
+    }
+
     /// Check if this cluster is running.
     ///
     /// Tries to distinguish carefully between "definitely running", "definitely
@@ -452,6 +467,27 @@ mod tests {
             println!("{:?}", runtime);
             let cluster = Cluster::new(&data_dir, runtime);
             assert!(cluster.exists());
+        }
+    }
+
+    #[test]
+    fn cluster_has_no_version_when_it_does_not_exist() {
+        for runtime in Runtime::find_on_path() {
+            println!("{:?}", runtime);
+            let cluster = Cluster::new("some/path", runtime);
+            assert_eq!(cluster.version(), None);
+        }
+    }
+
+    #[test]
+    fn cluster_has_version_when_it_does_exists() {
+        let data_dir = tempdir::TempDir::new("data").unwrap();
+        let version_file = data_dir.path().join("PG_VERSION");
+        File::create(&version_file).unwrap();
+        for runtime in Runtime::find_on_path() {
+            println!("{:?}", runtime);
+            let cluster = Cluster::new(&data_dir, runtime);
+            assert!(matches!(cluster.version(), Some(_)));
         }
     }
 
