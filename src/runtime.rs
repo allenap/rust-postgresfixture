@@ -8,11 +8,11 @@
 
 use std::env;
 use std::ffi::OsStr;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::util;
-use crate::version::{Version, VersionError};
 
 #[derive(Clone, Debug, Default)]
 pub struct Runtime {
@@ -51,18 +51,19 @@ impl Runtime {
         }
     }
 
-    /// Get the version number of PostgreSQL.
+    /// Get the version string of PostgreSQL from `pg_ctl`.
     ///
     /// <https://www.postgresql.org/support/versioning/> shows that version
-    /// numbers are **not** SemVer compatible, so we have to parse them
-    /// ourselves.
-    pub fn version(&self) -> Result<Version, VersionError> {
+    /// numbers are **not** SemVer compatible. The [`version`][`crate::version`]
+    /// module in this crate can parse the version string returned by this
+    /// function.
+    pub fn version(&self) -> Result<String, io::Error> {
         // Execute pg_ctl and extract version.
         let version_output = self.execute("pg_ctl").arg("--version").output()?;
         let version_string = String::from_utf8_lossy(&version_output.stdout);
         // The version parser can deal with leading garbage, i.e. it can parse
         // "pg_ctl (PostgreSQL) 12.2" and get 12.2 out of it.
-        Ok(version_string.parse()?)
+        Ok(version_string.into())
     }
 
     /// Return a [`Command`] prepped to run the given `program` in this

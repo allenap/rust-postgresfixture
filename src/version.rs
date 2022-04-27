@@ -10,7 +10,7 @@
 //! PostgreSQL's versioning scheme.
 
 use std::str::FromStr;
-use std::{error, fmt, io, num};
+use std::{error, fmt, num};
 
 use regex::Regex;
 
@@ -29,35 +29,35 @@ impl fmt::Display for Version {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum VersionParseError {
+#[derive(Debug, PartialEq)]
+pub enum VersionError {
     BadlyFormed,
     Missing,
 }
 
-impl fmt::Display for VersionParseError {
+impl fmt::Display for VersionError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            VersionParseError::BadlyFormed => write!(fmt, "badly formed"),
-            VersionParseError::Missing => write!(fmt, "not found"),
+            VersionError::BadlyFormed => write!(fmt, "badly formed"),
+            VersionError::Missing => write!(fmt, "not found"),
         }
     }
 }
 
-impl error::Error for VersionParseError {
+impl error::Error for VersionError {
     fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
 }
 
-impl From<num::ParseIntError> for VersionParseError {
-    fn from(_error: num::ParseIntError) -> VersionParseError {
-        VersionParseError::BadlyFormed
+impl From<num::ParseIntError> for VersionError {
+    fn from(_error: num::ParseIntError) -> VersionError {
+        VersionError::BadlyFormed
     }
 }
 
 impl FromStr for Version {
-    type Err = VersionParseError;
+    type Err = VersionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let re = Regex::new(r"(?x) \b (\d+) [.] (\d+) (?: [.] (\d+) )? \b").unwrap();
@@ -69,65 +69,29 @@ impl FromStr for Version {
                     Some(m) => {
                         let c = m.as_str().parse::<u32>()?;
                         if a >= 10 {
-                            Err(VersionParseError::BadlyFormed)
+                            Err(VersionError::BadlyFormed)
                         } else {
                             Ok(Version::Pre10(a, b, c))
                         }
                     }
                     None => {
                         if a < 10 {
-                            Err(VersionParseError::BadlyFormed)
+                            Err(VersionError::BadlyFormed)
                         } else {
                             Ok(Version::Post10(a, b))
                         }
                     }
                 }
             }
-            None => Err(VersionParseError::Missing),
+            None => Err(VersionError::Missing),
         }
-    }
-}
-
-#[derive(Debug)]
-pub enum VersionError {
-    IoError(io::Error),
-    Invalid(VersionParseError),
-}
-
-impl fmt::Display for VersionError {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            VersionError::IoError(ref e) => write!(fmt, "input/output error: {}", e),
-            VersionError::Invalid(ref e) => write!(fmt, "version was invalid: {}", e),
-        }
-    }
-}
-
-impl error::Error for VersionError {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
-            VersionError::IoError(ref error) => Some(error),
-            VersionError::Invalid(ref error) => Some(error),
-        }
-    }
-}
-
-impl From<io::Error> for VersionError {
-    fn from(error: io::Error) -> VersionError {
-        VersionError::IoError(error)
-    }
-}
-
-impl From<VersionParseError> for VersionError {
-    fn from(error: VersionParseError) -> VersionError {
-        VersionError::Invalid(error)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Version::{Post10, Pre10};
-    use super::{Version, VersionParseError::*};
+    use super::{Version, VersionError::*};
 
     use std::cmp::Ordering;
 

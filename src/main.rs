@@ -10,7 +10,7 @@ use clap::Parser;
 use color_eyre::eyre::{bail, Result, WrapErr};
 use color_eyre::{Help, SectionExt};
 
-use postgresfixture::{cluster, coordinate, lock, runtime};
+use postgresfixture::{cluster, coordinate, lock, runtime, version};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -60,9 +60,12 @@ fn main() -> Result<()> {
             let mut runtimes: Vec<_> = runtimes_on_path
                 .iter()
                 .zip(iter::once(true).chain(iter::repeat(false)))
-                .filter_map(|(runtime, default)| match runtime.version() {
-                    Ok(version) => Some((version, runtime, default)),
-                    Err(_) => None,
+                .filter_map(|(runtime, default)| {
+                    match runtime.version().map(|v| v.parse::<version::Version>()) {
+                        Ok(Ok(version)) => Some((version, runtime, default)),
+                        Ok(Err(_)) => None,
+                        Err(_) => None,
+                    }
                 })
                 .collect();
 
