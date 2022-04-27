@@ -2,8 +2,8 @@
 //!
 //! ```rust
 //! # use postgresfixture::version::Version;
-//! assert_eq!(Ok(Version { major: 9, minor: 6, patch: Some(17) }), "9.6.17".parse());
-//! assert_eq!(Ok(Version { major: 14, minor: 6, patch: None}), "14.6".parse());
+//! assert_eq!(Ok(Version::Pre10(9, 6, 17)), "9.6.17".parse());
+//! assert_eq!(Ok(Version::Post10(14, 6)), "14.6".parse());
 //! ```
 //!
 //! See <https://www.postgresql.org/support/versioning/> for information on
@@ -14,18 +14,17 @@ use std::{error, fmt, io, num};
 
 use regex::Regex;
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub struct Version {
-    pub major: u32,
-    pub minor: u32,
-    pub patch: Option<u32>,
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Version {
+    Pre10(u32, u32, u32),
+    Post10(u32, u32),
 }
 
 impl fmt::Display for Version {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match self.patch {
-            Some(patch) => fmt.pad(&format!("{}.{}.{}", self.major, self.minor, patch)),
-            None => fmt.pad(&format!("{}.{}", self.major, self.minor)),
+        match self {
+            Version::Pre10(a, b, c) => fmt.pad(&format!("{}.{}.{}", a, b, c)),
+            Version::Post10(a, b) => fmt.pad(&format!("{}.{}", a, b)),
         }
     }
 }
@@ -63,14 +62,27 @@ impl FromStr for Version {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let re = Regex::new(r"(?x) \b (\d+) [.] (\d+) (?: [.] (\d+) )? \b").unwrap();
         match re.captures(s) {
-            Some(caps) => Ok(Version {
-                major: caps[1].parse()?,
-                minor: caps[2].parse()?,
-                patch: match caps.get(3) {
-                    Some(m) => Some(m.as_str().parse()?),
-                    None => None,
-                },
-            }),
+            Some(caps) => {
+                let a = caps[1].parse::<u32>()?;
+                let b = caps[2].parse::<u32>()?;
+                match caps.get(3) {
+                    Some(m) => {
+                        let c = m.as_str().parse::<u32>()?;
+                        if a >= 10 {
+                            Err(VersionParseError::BadlyFormed)
+                        } else {
+                            Ok(Version::Pre10(a, b, c))
+                        }
+                    }
+                    None => {
+                        if a < 10 {
+                            Err(VersionParseError::BadlyFormed)
+                        } else {
+                            Ok(Version::Post10(a, b))
+                        }
+                    }
+                }
+            }
             None => Err(VersionParseError::Missing),
         }
     }
@@ -114,16 +126,19 @@ impl From<VersionParseError> for VersionError {
 
 #[cfg(test)]
 mod tests {
+    use super::Version::{Post10, Pre10};
     use super::{Version, VersionParseError::*};
+
+    use std::cmp::Ordering;
 
     #[test]
     fn parses_version_below_10() {
-        assert_eq!(Ok(vp(9, 6, 17)), "9.6.17".parse());
+        assert_eq!(Ok(Pre10(9, 6, 17)), "9.6.17".parse());
     }
 
     #[test]
     fn parses_version_above_10() {
-        assert_eq!(Ok(v(12, 2)), "12.2".parse());
+        assert_eq!(Ok(Post10(12, 2)), "12.2".parse());
     }
 
     #[test]
@@ -139,27 +154,42 @@ mod tests {
 
     #[test]
     fn displays_version_below_10() {
-        assert_eq!("9.6.17", format!("{}", vp(9, 6, 17)));
+        assert_eq!("9.6.17", format!("{}", Pre10(9, 6, 17)));
     }
 
     #[test]
     fn displays_version_above_10() {
-        assert_eq!("12.2", format!("{}", v(12, 2)));
+        assert_eq!("12.2", format!("{}", Post10(12, 2)));
     }
 
-    fn vp(major: u32, minor: u32, patch: u32) -> Version {
-        Version {
-            major,
-            minor,
-            patch: Some(patch),
-        }
+    #[test]
+    #[rustfmt::skip]
+    fn derive_partial_ord_works_as_expected() {
+        assert_eq!(Pre10(9, 10, 11).partial_cmp(&Post10(10, 11)), Some(Ordering::Less));
+        assert_eq!(Post10(10, 11).partial_cmp(&Pre10(9, 10, 11)), Some(Ordering::Greater));
+        assert_eq!(Pre10(9, 10, 11).partial_cmp(&Pre10(9, 10, 11)), Some(Ordering::Equal));
+        assert_eq!(Post10(10, 11).partial_cmp(&Post10(10, 11)), Some(Ordering::Equal));
     }
 
-    fn v(major: u32, minor: u32) -> Version {
-        Version {
-            major,
-            minor,
-            patch: None,
-        }
+    #[test]
+    fn derive_ord_works_as_expected() {
+        let mut versions = vec![
+            Pre10(9, 10, 11),
+            Post10(10, 11),
+            Post10(14, 2),
+            Pre10(9, 10, 12),
+            Post10(10, 12),
+        ];
+        versions.sort(); // Uses `Ord`.
+        assert_eq!(
+            versions,
+            vec![
+                Pre10(9, 10, 11),
+                Pre10(9, 10, 12),
+                Post10(10, 11),
+                Post10(10, 12),
+                Post10(14, 2)
+            ]
+        );
     }
 }

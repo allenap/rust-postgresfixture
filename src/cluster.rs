@@ -150,9 +150,9 @@ impl Cluster {
         // later versions, so here we check for specific codes to avoid
         // masking errors from insufficient permissions or missing
         // executables, for example.
-        let running = match (version.major >= 10, version.major) {
+        let running = match version {
             // PostgreSQL 10.x and later.
-            (true, _) => {
+            version::Version::Post10(_major, _minor) => {
                 // PostgreSQL 10
                 // https://www.postgresql.org/docs/10/static/app-pg-ctl.html
                 match code {
@@ -170,12 +170,12 @@ impl Cluster {
                 }
             }
             // PostgreSQL 9.x only.
-            (false, 9) => {
+            version::Version::Pre10(9, point, _minor) => {
                 // PostgreSQL 9.4+
                 // https://www.postgresql.org/docs/9.4/static/app-pg-ctl.html
                 // https://www.postgresql.org/docs/9.5/static/app-pg-ctl.html
                 // https://www.postgresql.org/docs/9.6/static/app-pg-ctl.html
-                if version.minor >= 4 {
+                if point >= 4 {
                     match code {
                         // 3 means that the data directory is present and
                         // accessible but that the server is not running.
@@ -193,7 +193,7 @@ impl Cluster {
                 // PostgreSQL 9.2+
                 // https://www.postgresql.org/docs/9.2/static/app-pg-ctl.html
                 // https://www.postgresql.org/docs/9.3/static/app-pg-ctl.html
-                else if version.minor >= 2 {
+                else if point >= 2 {
                     match code {
                         // 3 means that the data directory is present and
                         // accessible but that the server is not running OR
@@ -218,7 +218,7 @@ impl Cluster {
                 }
             }
             // All other versions.
-            (_, _) => None,
+            version::Version::Pre10(_major, _point, _minor) => None,
         };
 
         match running {
