@@ -32,7 +32,7 @@ postgres = "^0.19.2"
 rand = "^0.8.5"
 regex = "^1.5.4"
 shell-quote = "^0.3.0"
-uuid = {version = "^0.8.2", features = ["v5"]}
+uuid = {version = "^1.1.1", features = ["v5"]}
 
 [dev-dependencies]
 tempdir = "^0.3.7"
