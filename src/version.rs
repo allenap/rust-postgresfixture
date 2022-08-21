@@ -30,7 +30,7 @@ impl fmt::Display for Version {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum VersionParseError {
     BadlyFormed,
     Missing,
