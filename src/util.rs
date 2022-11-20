@@ -10,7 +10,7 @@ type PrependedPath = Result<OsString, env::JoinPathsError>;
 /// *not* update `PATH` in the environment.
 pub fn prepend_to_path(dir: &Path, path: Option<OsString>) -> PrependedPath {
     Ok(match path {
-        None => env::join_paths(&[dir])?,
+        None => env::join_paths([dir])?,
         Some(path) => {
             let mut paths = vec![dir.to_path_buf()];
             paths.extend(env::split_paths(&path).filter(|path| path != dir));
