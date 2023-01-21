@@ -36,7 +36,7 @@ pub fn run_and_stop<F, T>(
     action: F,
 ) -> Result<T, ClusterError>
 where
-    F: FnOnce() -> T,
+    F: std::panic::UnwindSafe + FnOnce() -> T,
 {
     let lock = startup(cluster, lock)?;
     let result = std::panic::catch_unwind(action);
@@ -60,7 +60,7 @@ pub fn run_and_destroy<F, T>(
     action: F,
 ) -> Result<T, ClusterError>
 where
-    F: UnwindSafe + FnOnce() -> T,
+    F: std::panic::UnwindSafe + FnOnce() -> T,
 {
     let lock = startup(cluster, lock)?;
     let result = std::panic::catch_unwind(action);
