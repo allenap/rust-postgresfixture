@@ -36,12 +36,15 @@ pub fn run_and_stop<F, T>(
     action: F,
 ) -> Result<T, ClusterError>
 where
-    F: FnOnce() -> T,
+    F: std::panic::UnwindSafe + FnOnce() -> T,
 {
     let lock = startup(cluster, lock)?;
-    let result = action();
-    shutdown(cluster, lock, |cluster| cluster.stop())?;
-    Ok(result)
+    let action_res = std::panic::catch_unwind(action);
+    let _: Option<bool> = shutdown(cluster, lock, |cluster| cluster.stop())?;
+    match action_res {
+        Ok(result) => Ok(result),
+        Err(err) => std::panic::resume_unwind(err),
+    }
 }
 
 /// Perform `action` in `cluster`, destroying the cluster before returning.
@@ -57,12 +60,15 @@ pub fn run_and_destroy<F, T>(
     action: F,
 ) -> Result<T, ClusterError>
 where
-    F: FnOnce() -> T,
+    F: std::panic::UnwindSafe + FnOnce() -> T,
 {
     let lock = startup(cluster, lock)?;
-    let result = action();
-    shutdown(cluster, lock, |cluster| cluster.destroy())?;
-    Ok(result)
+    let action_res = std::panic::catch_unwind(action);
+    let shutdown_res = shutdown(cluster, lock, |cluster| cluster.destroy());
+    match action_res {
+        Ok(result) => shutdown_res.map(|_| result),
+        Err(err) => std::panic::resume_unwind(err),
+    }
 }
 
 fn startup(
