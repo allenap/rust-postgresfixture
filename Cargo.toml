@@ -28,17 +28,17 @@ name = "postgresfixture"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "^3.1.0", features = ["derive", "env"] }
-color-eyre = "^0.6.1"
-ctrlc = { version = "^3.2.1", features = ["termination"] }
-either = "^1.6.1"
-nix = "^0.23.0"
-postgres = "^0.19.2"
+clap = { version = "^3.2.23", features = ["derive", "env"] }
+color-eyre = "^0.6.2"
+ctrlc = { version = "^3.2.5", features = ["termination"] }
+either = "^1.8.1"
+nix = "^0.26.2"
+postgres = "^0.19.4"
 postgres-protocol = "^0.6.4"
 rand = "^0.8.5"
-regex = "^1.5.4"
+regex = "^1.7.1"
 shell-quote = "^0.3.0"
-uuid = { version = "^0.8.2", features = ["v5"] }
+uuid = { version = "^1.3.0", features = ["v5"] }
 
 [dev-dependencies]
 tempdir = "^0.3.7"
