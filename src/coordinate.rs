@@ -39,10 +39,10 @@ where
     F: std::panic::UnwindSafe + FnOnce() -> T,
 {
     let lock = startup(cluster, lock)?;
-    let result = std::panic::catch_unwind(action);
-    let shutdown_res = shutdown(cluster, lock, |cluster| cluster.stop())?;
-    match result {
-        Ok(result) => shutdown_res.map(|_| result),
+    let action_res = std::panic::catch_unwind(action);
+    let _: Option<bool> = shutdown(cluster, lock, |cluster| cluster.stop())?;
+    match action_res {
+        Ok(result) => Ok(result),
         Err(err) => std::panic::resume_unwind(err),
     }
 }
@@ -63,9 +63,9 @@ where
     F: std::panic::UnwindSafe + FnOnce() -> T,
 {
     let lock = startup(cluster, lock)?;
-    let result = std::panic::catch_unwind(action);
+    let action_res = std::panic::catch_unwind(action);
     let shutdown_res = shutdown(cluster, lock, |cluster| cluster.destroy());
-    match result {
+    match action_res {
         Ok(result) => shutdown_res.map(|_| result),
         Err(err) => std::panic::resume_unwind(err),
     }

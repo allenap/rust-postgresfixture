@@ -85,7 +85,7 @@ const UUID_NS: uuid::Uuid = uuid::Uuid::from_u128(938751034366334704143487503057
 
 fn run<F>(database_dir: PathBuf, database_name: &str, destroy: bool, action: F) -> Result<i32>
 where
-    F: FnOnce(&cluster::Cluster) -> Result<i32>,
+    F: FnOnce(&cluster::Cluster) -> Result<i32> + std::panic::UnwindSafe,
 {
     // Create the cluster directory first.
     match fs::create_dir(&database_dir) {
