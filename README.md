@@ -11,7 +11,7 @@ development server. However, it came into its own in MAAS's test suites, and was
 key to [making MAAS's test suites faster][maas-faster-tests].
 
 [postgresfixture]: https://pypi.python.org/pypi/postgresfixture
-[maas-faster-tests]: https://allenap.me/post/the-way-to-run-tests-quickly-in-maas/
+[maas-faster-tests]: https://allenap.me/post/the-way-to-run-tests-quickly-in-maas
 
 This Rust version started out as a straightforward port but it has deviated
 significantly from the design of its Python counterpart.
