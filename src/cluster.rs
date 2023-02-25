@@ -345,7 +345,10 @@ impl Cluster {
 
     /// Create the named database.
     pub fn createdb(&self, database: &str) -> Result<bool, ClusterError> {
-        let statement = format!("CREATE DATABASE {}", &database);
+        let statement = format!(
+            "CREATE DATABASE {}",
+            postgres_protocol::escape::escape_identifier(database)
+        );
         self.connect("template1")?
             .execute(statement.as_str(), &[])?;
         Ok(true)
@@ -353,7 +356,10 @@ impl Cluster {
 
     /// Drop the named database.
     pub fn dropdb(&self, database: &str) -> Result<bool, ClusterError> {
-        let statement = format!("DROP DATABASE {}", &database);
+        let statement = format!(
+            "DROP DATABASE {}",
+            postgres_protocol::escape::escape_identifier(database)
+        );
         self.connect("template1")?
             .execute(statement.as_str(), &[])?;
         Ok(true)
@@ -591,6 +597,33 @@ mod tests {
             let observed: HashSet<String> = cluster.databases().unwrap().iter().cloned().collect();
             assert_eq!(expected, observed);
 
+            cluster.destroy().unwrap();
+        }
+    }
+
+    #[test]
+    fn cluster_databases_with_non_plain_names_can_be_created_and_dropped() {
+        // PostgreSQL identifiers containing hyphens, for example, or where we
+        // want to preserve capitalisation, are possible.
+        for runtime in Runtime::find_on_path() {
+            println!("{:?}", runtime);
+            let data_dir = tempdir::TempDir::new("data").unwrap();
+            let cluster = Cluster::new(&data_dir, runtime);
+            cluster.start().unwrap();
+            cluster.createdb("foo-bar").unwrap();
+            cluster.createdb("Foo-BAR").unwrap();
+
+            let expected: HashSet<String> =
+                ["foo-bar", "Foo-BAR", "postgres", "template0", "template1"]
+                    .iter()
+                    .cloned()
+                    .map(|s| s.to_string())
+                    .collect();
+            let observed: HashSet<String> = cluster.databases().unwrap().iter().cloned().collect();
+            assert_eq!(expected, observed);
+
+            cluster.dropdb("foo-bar").unwrap();
+            cluster.dropdb("Foo-BAR").unwrap();
             cluster.destroy().unwrap();
         }
     }

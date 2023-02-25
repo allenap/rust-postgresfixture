@@ -1,6 +1,11 @@
 [package]
 authors = ["Gavin Panella <gavinpanella@gmail.com>"]
-categories = ["command-line-utilities", "database", "development-tools", "development-tools::testing"]
+categories = [
+    "command-line-utilities",
+    "database",
+    "development-tools",
+    "development-tools::testing",
+]
 description = "Easily create and manage PostgreSQL clusters on demand for testing and development."
 edition = "2021"
 keywords = ["database", "postgres", "postgresql"]
@@ -11,7 +16,7 @@ repository = "https://github.com/allenap/rust-postgresfixture"
 version = "0.3.2"
 
 [badges]
-travis-ci = {repository = "allenap/rust-postgresfixture", branch = "master"}
+travis-ci = { repository = "allenap/rust-postgresfixture", branch = "master" }
 
 [lib]
 name = "postgresfixture"
@@ -23,16 +28,17 @@ name = "postgresfixture"
 path = "src/main.rs"
 
 [dependencies]
-clap = {version = "^3.1.0", features = ["derive", "env"]}
+clap = { version = "^3.1.0", features = ["derive", "env"] }
 color-eyre = "^0.6.1"
-ctrlc = {version = "^3.2.1", features = ["termination"]}
+ctrlc = { version = "^3.2.1", features = ["termination"] }
 either = "^1.6.1"
 nix = "^0.23.0"
 postgres = "^0.19.2"
+postgres-protocol = "^0.6.4"
 rand = "^0.8.5"
 regex = "^1.5.4"
 shell-quote = "^0.3.0"
-uuid = {version = "^0.8.2", features = ["v5"]}
+uuid = { version = "^0.8.2", features = ["v5"] }
 
 [dev-dependencies]
 tempdir = "^0.3.7"
