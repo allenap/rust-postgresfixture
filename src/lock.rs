@@ -54,7 +54,7 @@ impl TryFrom<&Uuid> for UnlockedFile {
 
     fn try_from(uuid: &Uuid) -> std::io::Result<Self> {
         let mut buffer = Uuid::encode_buffer();
-        let uuid = uuid.to_simple().encode_lower(&mut buffer);
+        let uuid = uuid.simple().encode_lower(&mut buffer);
         let filename = ".postgresfixture.".to_owned() + uuid;
         let path = std::env::temp_dir().join(filename);
         UnlockedFile::try_from(&*path)
