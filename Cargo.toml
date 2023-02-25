@@ -28,7 +28,7 @@ name = "postgresfixture"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "^3.2.23", features = ["derive", "env"] }
+clap = { version = "^4.1.6", features = ["derive", "env"] }
 color-eyre = "^0.6.2"
 ctrlc = { version = "^3.2.5", features = ["termination"] }
 either = "^1.8.1"
