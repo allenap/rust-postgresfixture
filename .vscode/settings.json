@@ -1,0 +1,27 @@
+{
+    "cSpell.words": [
+        "bindir",
+        "canonicalize",
+        "createdb",
+        "ctype",
+        "datadir",
+        "datname",
+        "datnames",
+        "dbname",
+        "dealias",
+        "doctest",
+        "EAGAIN",
+        "errno",
+        "logfile",
+        "PGDATA",
+        "PGDATABASE",
+        "PGHOST",
+        "pidfile",
+        "postgresfixture",
+        "psql",
+        "runtimes",
+        "SIGINT",
+        "synchronisation",
+        "tempdir"
+    ]
+}
