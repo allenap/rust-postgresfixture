@@ -37,22 +37,19 @@ what runtime will actually be used.
 
 ```shellsession
 $ postgresfixture --help
-postgresfixture 0.3.2
-Gavin Panella <gavinpanella@gmail.com>
 Easily create and manage PostgreSQL clusters on demand for testing and development.
 
-USAGE:
-    postgresfixture <SUBCOMMAND>
+Usage: postgresfixture <COMMAND>
 
-OPTIONS:
-    -h, --help       Print help information
-    -V, --version    Print version information
+Commands:
+  shell     Start a psql shell, creating and starting the cluster as necessary
+  exec      Execute an arbitrary command, creating and starting the cluster as necessary
+  runtimes  List PostgreSQL runtimes discovered on PATH
+  help      Print this message or the help of the given subcommand(s)
 
-SUBCOMMANDS:
-    shell       Start a psql shell, creating and starting the cluster as necessary
-    exec        Execute an arbitrary command, creating and starting the cluster as necessary
-    runtimes    List PostgreSQL runtimes discovered on PATH
-    help        Print this message or the help of the given subcommand(s)
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
 
 $ postgresfixture runtimes
    9.4.26     /usr/local/Cellar/postgresql@9.4/9.4.26/bin
@@ -154,8 +151,9 @@ $ brew install postgresql@{9.{4,5,6},10,11,12,13}  # Adjust as necessary.
 2. Paste updated `--help` output into [`README.md`](README.md) (this file; see
    near the top). On macOS the command `cargo run -- --help | pbcopy` is
    helpful.
-3. Build **and** test: `cargo build && cargo test`. The latter on its own does
-   do a build, but a test build can hide warnings about dead code, so do both.
+3. Build **and** test: `cargo build && ./with-runtimes cargo test`. The latter
+   on its own does do a build, but a test build can hide warnings about dead
+   code, so do both.
 4. Commit with message "Bump version to `$VERSION`."
 5. Tag with "v`$VERSION`", e.g. `git tag v1.0.10`.
 6. Push: `git push --tags`.
