@@ -242,10 +242,14 @@ impl Cluster {
             // Create the cluster and report back that we did so.
             false => {
                 fs::create_dir_all(&self.datadir)?;
+                #[allow(clippy::suspicious_command_arg_space)]
                 self.ctl()
                     .arg("init")
                     .arg("-s")
                     .arg("-o")
+                    // Passing multiple flags in a single `arg(...)` is
+                    // intentional. These constitute the single value for the
+                    // `-o` flag above.
                     .arg("-E utf8 --locale C -A trust")
                     .env("TZ", "UTC")
                     .output()?;
