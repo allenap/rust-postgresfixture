@@ -12,6 +12,7 @@
         "doctest",
         "EAGAIN",
         "errno",
+        "initdb",
         "logfile",
         "PGDATA",
         "PGDATABASE",

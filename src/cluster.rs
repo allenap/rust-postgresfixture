@@ -521,9 +521,23 @@ mod tests {
                 assert_eq!(params.get("TimeZone"), Some(&"UTC".into()));
                 assert_eq!(params.get("log_timezone"), Some(&"UTC".into()));
             }
-            assert_eq!(params.get("lc_collate"), Some(&"C".into()));
-            assert_eq!(params.get("lc_ctype"), Some(&"C".into()));
-            assert_eq!(params.get("lc_messages"), Some(&"C".into()));
+            // 🚨 In PostgreSQL 16:
+            // - lc_collate is undefined, not inherited from LC_ALL or
+            //   LC_COLLATE, nor from the `initdb --lc-collate` option.
+            // - lc_ctype is undefined, not inherited from LC_ALL or LC_CTYPE,
+            //   nor from the `initdb --lc-ctype` option.
+            // - lc_messages is "", not inherited from LC_ALL or LC_MESSAGES,
+            //   nor from the `initdb --lc-messages` option.
+            // It's not yet clear if these are bugs or intentional.
+            if runtime.version().unwrap().major == 16 {
+                assert_eq!(params.get("lc_collate"), None);
+                assert_eq!(params.get("lc_ctype"), None);
+                assert_eq!(params.get("lc_messages"), Some(&"".into()));
+            } else {
+                assert_eq!(params.get("lc_collate"), Some(&"C".into()));
+                assert_eq!(params.get("lc_ctype"), Some(&"C".into()));
+                assert_eq!(params.get("lc_messages"), Some(&"C".into()));
+            }
             assert_eq!(params.get("lc_monetary"), Some(&"C".into()));
             assert_eq!(params.get("lc_numeric"), Some(&"C".into()));
             assert_eq!(params.get("lc_time"), Some(&"C".into()));
