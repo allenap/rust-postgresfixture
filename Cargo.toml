@@ -32,9 +32,9 @@ clap = { version = "^4.1.6", features = ["derive", "env"] }
 color-eyre = "^0.6.2"
 ctrlc = { version = "^3.2.5", features = ["termination"] }
 either = "^1.8.1"
-nix = "^0.26.2"
 postgres = "^0.19.4"
 postgres-protocol = "^0.6.4"
+nix = "^0.27.1"
 rand = "^0.8.5"
 regex = "^1.7.1"
 shell-quote = "^0.3.0"
