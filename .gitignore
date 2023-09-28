@@ -1,5 +1,17 @@
-target/
-**/*.rs.bk
-**/scratch.rs
-Cargo.lock
-.*.lock
+# At present, Cargo.lock is not tracked. I think this is mostly beneficial for
+# those folks who use postgresfixture as a library, but can mean that it may not
+# build as a binary, e.g. via `cargo install postgresfixture`.
+/Cargo.lock
+
+# The default PGDATA for the `postgresfixture` binary – or `cargo run` – is
+# `cluster`. Ignore it by default; like it or not, it's going to get created
+# when mucking around.
+/cluster/
+
+# Rust build stuff.
+/target/
+
+# Experimentation!
+/scratch.rs
+
+# End.
