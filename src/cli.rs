@@ -68,7 +68,7 @@ pub struct DatabaseArgs {
         long = "database",
         env = "PGDATABASE",
         value_name = "PGDATABASE",
-        default_value = "data",
+        default_value = "postgres",
         display_order = 2
     )]
     pub name: String,

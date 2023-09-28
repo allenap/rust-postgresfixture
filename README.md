@@ -61,7 +61,7 @@ $ postgresfixture runtimes
 => 14.2       /usr/local/bin
 
 $ postgresfixture shell
-data=# select …
+postgres=# select …
 
 $ postgresfixture exec pg_dump
 --
