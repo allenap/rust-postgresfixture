@@ -18,6 +18,7 @@
         "PGDATABASE",
         "PGHOST",
         "pidfile",
+        "POSIX",
         "postgresfixture",
         "psql",
         "runtimes",

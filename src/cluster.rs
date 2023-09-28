@@ -521,17 +521,31 @@ mod tests {
                 assert_eq!(params.get("TimeZone"), Some(&"UTC".into()));
                 assert_eq!(params.get("log_timezone"), Some(&"UTC".into()));
             }
-            // 🚨 In PostgreSQL 16:
-            // - lc_collate is undefined, not inherited from LC_ALL or
-            //   LC_COLLATE, nor from the `initdb --lc-collate` option.
-            // - lc_ctype is undefined, not inherited from LC_ALL or LC_CTYPE,
-            //   nor from the `initdb --lc-ctype` option.
-            // - lc_messages is "", not inherited from LC_ALL or LC_MESSAGES,
-            //   nor from the `initdb --lc-messages` option.
-            // It's not yet clear if these are bugs or intentional.
-            if runtime.version().unwrap().major == 16 {
+            // PostgreSQL 16's release notes reveal:
+            //
+            //   Remove read-only server variables lc_collate and lc_ctype …
+            //   Collations and locales can vary between databases so having
+            //   them as read-only server variables was unhelpful.
+            //     -- https://www.postgresql.org/docs/16/release-16.html
+            //
+            if runtime.version().unwrap() >= Version::from_str("16.0").unwrap() {
                 assert_eq!(params.get("lc_collate"), None);
                 assert_eq!(params.get("lc_ctype"), None);
+                // 🚨 Also in PostgreSQL 16, lc_messages is now the empty string
+                // when specified as "C" via any mechanism:
+                //
+                // - Explicitly given to `initdb`, e.g. `initdb --locale=C`,
+                //   `initdb --lc-messages=C`.
+                //
+                // - Inherited from the environment (LC_ALL, LC_MESSAGES) at any
+                //   point (`initdb`, `pg_ctl start`, or from the client).
+                //
+                // When a different locale is used with `initdb --locale` or
+                // `initdb --lc-messages`, e.g. POSIX, es_ES, the locale IS
+                // used; lc_messages reflects the choice.
+                //
+                // It's not yet clear if this is a bug or intentional.
+                // https://www.postgresql.org/message-id/18136-4914128da6cfc502%40postgresql.org
                 assert_eq!(params.get("lc_messages"), Some(&"".into()));
             } else {
                 assert_eq!(params.get("lc_collate"), Some(&"C".into()));
