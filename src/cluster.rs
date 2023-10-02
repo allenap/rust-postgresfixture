@@ -282,7 +282,6 @@ impl Cluster {
         //  -w -- wait until startup is complete.
         // postgres options:
         //  -h <arg> -- host name; empty arg means Unix socket only.
-        //  -F -- don't bother fsync'ing.
         //  -k -- socket directory.
         self.ctl()
             .arg("start")
@@ -292,7 +291,7 @@ impl Cluster {
             .arg("-w")
             .arg("-o")
             .arg({
-                let mut arg = b"-h '' -F -k "[..].into();
+                let mut arg = b"-h '' -k "[..].into();
                 escape_into(&self.datadir, &mut arg);
                 OsString::from_vec(arg)
             })
