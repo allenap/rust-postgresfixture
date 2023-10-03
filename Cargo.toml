@@ -1,5 +1,5 @@
 [package]
-authors = ["Gavin Panella <gavinpanella@gmail.com>"]
+authors = ["Gavin Panella <gavin@allenap.me>"]
 categories = [
     "command-line-utilities",
     "database",
