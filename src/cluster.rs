@@ -1,10 +1,9 @@
 //! Create, start, introspect, stop, and destroy PostgreSQL clusters.
 
 use std::ffi::{OsStr, OsString};
-use std::io::Write;
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Output, Stdio};
+use std::process::{Command, ExitStatus, Output};
 use std::{env, error, fmt, fs, io};
 
 use nix::errno::Errno;
@@ -412,27 +411,6 @@ impl Cluster {
             Ok(false)
         }
     }
-
-    pub fn single(&self, commands: &[&str]) -> Result<Output, ClusterError> {
-        let mut child = self
-            .runtime
-            .execute("postgres")
-            .env("PGDATA", &self.datadir)
-            .env("PGHOST", &self.datadir)
-            .arg("--single")
-            .arg("-j")
-            .arg("template1")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
-        child
-            .stdin
-            .as_mut()
-            .ok_or(ClusterError::IoError(io::ErrorKind::BrokenPipe.into()))?
-            .write_all(commands.join(";\n\n").as_bytes())?;
-        Ok(child.wait_with_output()?)
-    }
 }
 
 #[cfg(test)]
@@ -445,8 +423,6 @@ mod tests {
     use std::fs::File;
     use std::path::{Path, PathBuf};
     use std::str::FromStr;
-
-    type TestResult = std::result::Result<(), super::ClusterError>;
 
     #[test]
     fn cluster_new() {
@@ -681,23 +657,5 @@ mod tests {
             cluster.dropdb("Foo-BAR").unwrap();
             cluster.destroy().unwrap();
         }
-    }
-
-    #[test]
-    fn cluster_single_runs_commands() -> TestResult {
-        for runtime in Runtime::find_on_path() {
-            println!("{:?}", runtime);
-            let data_dir = tempdir::TempDir::new("data")?;
-            let cluster = Cluster::new(&data_dir, runtime);
-            cluster.create()?;
-            cluster.single(&[
-                "ALTER SYSTEM SET fsync = 'on'",
-                "ALTER SYSTEM SET full_page_writes = 'off'",
-            ])?;
-            let conf_auto = std::fs::read_to_string(data_dir.path().join("postgresql.auto.conf"))?;
-            assert!(conf_auto.contains("fsync = 'on'"));
-            assert!(conf_auto.contains("full_page_writes = 'off'"));
-        }
-        Ok(())
     }
 }
