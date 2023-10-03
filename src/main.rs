@@ -18,60 +18,22 @@ fn main() -> Result<()> {
     let cli = cli::Cli::parse();
     let result = match cli.command {
         cli::Commands::Shell {
-            cluster:
-                cli::ClusterArgs {
-                    dir,
-                    faster,
-                    slower,
-                },
+            cluster,
             database,
             lifecycle,
-        } => {
-            run(
-                dir,
-                &database.name,
-                lifecycle.destroy,
-                |cluster| match (cluster.running()?, faster, slower) {
-                    // No change to go faster or slower, so do nothing.
-                    (_, false, false) => Ok(()),
-                    // Request to go faster; cluster is running.
-                    (true, true, _) => {
-                        let mut conn = cluster.connect("template1")?;
-                        conn.execute("ALTER SYSTEM SET fsync = 'off'", &[])?;
-                        conn.execute("ALTER SYSTEM SET full_page_writes = 'off'", &[])?;
-                        Ok(())
-                    }
-                    // Request to go slower; cluster is running.
-                    (true, _, true) => {
-                        let mut conn = cluster.connect("template1")?;
-                        conn.execute("ALTER SYSTEM SET fsync = 'on'", &[])?;
-                        conn.execute("ALTER SYSTEM SET full_page_writes = 'on'", &[])?;
-                        Ok(())
-                    }
-                    // Request to go faster; cluster is NOT running.
-                    (false, true, _) => cluster
-                        .single(&[
-                            "ALTER SYSTEM SET fsync = 'off'",
-                            "ALTER SYSTEM SET full_page_writes = 'off'",
-                        ])
-                        .map(|_output| ()),
-                    // Request to go slower; cluster is NOT running.
-                    (false, _, true) => cluster
-                        .single(&[
-                            "ALTER SYSTEM SET fsync = 'on'",
-                            "ALTER SYSTEM SET full_page_writes = 'on'",
-                        ])
-                        .map(|_output| ()),
-                },
-                |cluster| {
-                    check_exit(
-                        cluster
-                            .shell(&database.name)
-                            .wrap_err("Starting PostgreSQL shell in cluster failed")?,
-                    )
-                },
-            )
-        }
+        } => run(
+            cluster.dir,
+            &database.name,
+            lifecycle.destroy,
+            initialise(cluster.faster, cluster.slower),
+            |cluster| {
+                check_exit(
+                    cluster
+                        .shell(&database.name)
+                        .wrap_err("Starting PostgreSQL shell in cluster failed")?,
+                )
+            },
+        ),
         cli::Commands::Exec {
             cluster,
             database,
@@ -82,7 +44,7 @@ fn main() -> Result<()> {
             cluster.dir,
             &database.name,
             lifecycle.destroy,
-            |_cluster| Ok(()),
+            initialise(cluster.faster, cluster.slower),
             |cluster| {
                 check_exit(
                     cluster
@@ -178,7 +140,9 @@ where
         coordinate::run_and_stop
     };
 
-    runner(&cluster, lock, initialise, |cluster: &cluster::Cluster| {
+    runner(&cluster, lock, |cluster: &cluster::Cluster| {
+        initialise(cluster)?;
+
         if !cluster
             .databases()
             .wrap_err("Could not list databases")?
@@ -198,4 +162,33 @@ where
         // Finally, run the given action.
         action(cluster)
     })?
+}
+
+/// Create an initialisation function that will set appropriate PostgreSQL
+/// settings, e.g. `fsync`, `full_page_writes`, etc. that need to be set early.
+fn initialise(
+    faster: bool,
+    slower: bool,
+) -> impl std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::ClusterError> {
+    if faster {
+        |cluster: &cluster::Cluster| {
+            let mut conn = cluster.connect("template1")?;
+            conn.execute("ALTER SYSTEM SET fsync = 'off'", &[])?;
+            conn.execute("ALTER SYSTEM SET full_page_writes = 'off'", &[])?;
+            // TODO: Check `pg_file_settings` for errors before reloading.
+            conn.execute("SELECT pg_reload_conf()", &[])?;
+            Ok(())
+        }
+    } else if slower {
+        |cluster: &cluster::Cluster| {
+            let mut conn = cluster.connect("template1")?;
+            conn.execute("ALTER SYSTEM SET fsync = 'on'", &[])?;
+            conn.execute("ALTER SYSTEM SET full_page_writes = 'on'", &[])?;
+            // TODO: Check `pg_file_settings` for errors before reloading.
+            conn.execute("SELECT pg_reload_conf()", &[])?;
+            Ok(())
+        }
+    } else {
+        |_: &cluster::Cluster| Ok(())
+    }
 }

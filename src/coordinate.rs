@@ -12,7 +12,7 @@
 //! let cluster = cluster::Cluster::new(&data_dir, runtime);
 //! let lock_file = cluster_dir.path().join("lock");
 //! let lock = lock::UnlockedFile::try_from(lock_file.as_path()).unwrap();
-//! assert!(coordinate::run_and_stop(&cluster, lock, |_| Ok(()), |cluster| cluster.exists()).unwrap())
+//! assert!(coordinate::run_and_stop(&cluster, lock, |cluster| cluster.exists()).unwrap())
 //! ```
 
 use std::time::Duration;
@@ -30,17 +30,15 @@ use crate::lock;
 /// (maybe) stops the cluster again, and finally returns the result of `action`.
 /// If there are other users of the cluster – i.e. if an exclusive lock cannot
 /// be acquired during the shutdown phase – then the cluster is left running.
-pub fn run_and_stop<'a, INIT, ACTION, T>(
+pub fn run_and_stop<'a, F, T>(
     cluster: &'a Cluster,
     lock: lock::UnlockedFile,
-    initialise: INIT,
-    action: ACTION,
+    action: F,
 ) -> Result<T, ClusterError>
 where
-    INIT: std::panic::UnwindSafe + FnOnce(&'a Cluster) -> Result<(), ClusterError>,
-    ACTION: std::panic::UnwindSafe + FnOnce(&'a Cluster) -> T,
+    F: std::panic::UnwindSafe + FnOnce(&'a Cluster) -> T,
 {
-    let lock = startup(cluster, lock, initialise)?;
+    let lock = startup(cluster, lock)?;
     let action_res = std::panic::catch_unwind(|| action(cluster));
     let _: Option<bool> = shutdown(cluster, lock, |cluster| cluster.stop())?;
     match action_res {
@@ -56,17 +54,15 @@ where
 /// returning. If there are other users of the cluster – i.e. if an exclusive
 /// lock cannot be acquired during the shutdown phase – then the cluster is left
 /// running and is **not** destroyed.
-pub fn run_and_destroy<'a, INIT, ACTION, T>(
+pub fn run_and_destroy<'a, F, T>(
     cluster: &'a Cluster,
     lock: lock::UnlockedFile,
-    initialise: INIT,
-    action: ACTION,
+    action: F,
 ) -> Result<T, ClusterError>
 where
-    INIT: std::panic::UnwindSafe + FnOnce(&'a Cluster) -> Result<(), ClusterError>,
-    ACTION: std::panic::UnwindSafe + FnOnce(&'a Cluster) -> T,
+    F: std::panic::UnwindSafe + FnOnce(&'a Cluster) -> T,
 {
-    let lock = startup(cluster, lock, initialise)?;
+    let lock = startup(cluster, lock)?;
     let action_res = std::panic::catch_unwind(|| action(cluster));
     let shutdown_res = shutdown(cluster, lock, |cluster| cluster.destroy());
     match action_res {
@@ -75,14 +71,10 @@ where
     }
 }
 
-fn startup<'a, INIT>(
-    cluster: &'a Cluster,
+fn startup(
+    cluster: &Cluster,
     mut lock: lock::UnlockedFile,
-    initialise: INIT,
-) -> Result<lock::LockedFileShared, ClusterError>
-where
-    INIT: std::panic::UnwindSafe + FnOnce(&'a Cluster) -> Result<(), ClusterError>,
-{
+) -> Result<lock::LockedFileShared, ClusterError> {
     loop {
         lock = match lock.try_lock_exclusive() {
             Ok(Left(lock)) => {
@@ -93,8 +85,6 @@ where
                 // exclusive lock, so we must check if the cluster is
                 // running _now_, else loop back to the top again.
                 if cluster.running()? {
-                    // Perform post-start initialisation.
-                    initialise(cluster)?;
                     return Ok(lock);
                 } else {
                     // Release all locks then sleep for a random time between
@@ -111,9 +101,7 @@ where
                 }
             }
             Ok(Right(lock)) => {
-                // We have an exclusive lock. Perform pre-start initialisation.
-                initialise(cluster)?;
-                // Now try to start the cluster.
+                // We have an exclusive lock, so try to start the cluster.
                 cluster.start()?;
                 // Once started, downgrade to a shared log.
                 return Ok(lock.lock_shared()?);
