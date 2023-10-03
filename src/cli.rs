@@ -48,11 +48,17 @@ pub enum Commands {
         args: Vec<OsString>,
     },
 
-    /// List PostgreSQL runtimes discovered on PATH.
+    /// List discovered PostgreSQL runtimes.
     ///
     /// The runtime shown on the line beginning with `=>` is the default.
     #[clap(display_order = 3)]
-    Runtimes,
+    Runtimes {
+        /// Find runtimes using platform-specific logic too.
+        ///
+        /// Without this option, only `PATH` is searched.
+        #[clap(long = "platform", default_value_t = false)]
+        platform: bool,
+    },
 }
 
 #[derive(Args)]

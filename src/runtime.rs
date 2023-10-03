@@ -82,6 +82,53 @@ impl Runtime {
         }
     }
 
+    /// Find runtimes using platform-specific knowledge (Linux).
+    ///
+    /// For example: on Debian and Ubuntu, check `/usr/lib/postgresql`.
+    #[cfg(any(doc, target_os = "linux"))]
+    pub fn find_on_platform() -> Vec<Self> {
+        glob::glob("/usr/lib/postgresql/*/bin/pg_ctl")
+            .ok()
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| entry.ok())
+                    .filter(|path| path.is_file())
+                    .filter_map(|path| path.parent().map(Self::new))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Find runtimes using platform-specific knowledge (macOS).
+    ///
+    /// For example: check Homebrew.
+    #[cfg(any(doc, target_os = "macos"))]
+    pub fn find_on_platform() -> Vec<Self> {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        Command::new("brew")
+            .arg("--prefix")
+            .output()
+            .ok()
+            .map(|output| OsString::from_vec(output.stdout))
+            .and_then(|brew_prefix| {
+                glob::glob(&format!(
+                    "{}/Cellar/postgresql@*/*/bin/pg_ctl",
+                    brew_prefix.to_string_lossy().trim_end()
+                ))
+                .ok()
+            })
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| entry.ok())
+                    .filter(|path| path.is_file())
+                    .filter_map(|path| path.parent().map(Self::new))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn new<P: AsRef<Path>>(bindir: P) -> Self {
         Self {
             bindir: Some(bindir.as_ref().to_path_buf()),
@@ -174,14 +221,21 @@ mod tests {
     #[test]
     fn runtime_find() {
         let path = env::var_os("PATH").expect("PATH not set");
-        let pgs = Runtime::find(&path);
-        assert_ne!(0, pgs.len());
+        let runtimes = Runtime::find(&path);
+        assert_ne!(0, runtimes.len());
     }
 
     #[test]
     fn runtime_find_on_path() {
-        let pgs = Runtime::find_on_path();
-        assert_ne!(0, pgs.len());
+        let runtimes = Runtime::find_on_path();
+        assert_ne!(0, runtimes.len());
+    }
+
+    #[test]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn runtime_find_on_platform() {
+        let runtimes = Runtime::find_on_platform();
+        assert_ne!(0, runtimes.len());
     }
 
     #[test]
