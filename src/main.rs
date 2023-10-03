@@ -18,27 +18,79 @@ fn main() -> Result<()> {
     let cli = cli::Cli::parse();
     let result = match cli.command {
         cli::Commands::Shell {
+            cluster:
+                cli::ClusterArgs {
+                    dir,
+                    faster,
+                    slower,
+                },
             database,
             lifecycle,
-        } => run(database.dir, &database.name, lifecycle.destroy, |cluster| {
-            check_exit(
-                cluster
-                    .shell(&database.name)
-                    .wrap_err("Starting PostgreSQL shell in cluster failed")?,
+        } => {
+            run(
+                dir,
+                &database.name,
+                lifecycle.destroy,
+                |cluster| match (cluster.running()?, faster, slower) {
+                    // No change to go faster or slower, so do nothing.
+                    (_, false, false) => Ok(()),
+                    // Request to go faster; cluster is running.
+                    (true, true, _) => {
+                        let mut conn = cluster.connect("template1")?;
+                        conn.execute("ALTER SYSTEM SET fsync = 'off'", &[])?;
+                        conn.execute("ALTER SYSTEM SET full_page_writes = 'off'", &[])?;
+                        Ok(())
+                    }
+                    // Request to go slower; cluster is running.
+                    (true, _, true) => {
+                        let mut conn = cluster.connect("template1")?;
+                        conn.execute("ALTER SYSTEM SET fsync = 'on'", &[])?;
+                        conn.execute("ALTER SYSTEM SET full_page_writes = 'on'", &[])?;
+                        Ok(())
+                    }
+                    // Request to go faster; cluster is NOT running.
+                    (false, true, _) => cluster
+                        .single(&[
+                            "ALTER SYSTEM SET fsync = 'off'",
+                            "ALTER SYSTEM SET full_page_writes = 'off'",
+                        ])
+                        .map(|_output| ()),
+                    // Request to go slower; cluster is NOT running.
+                    (false, _, true) => cluster
+                        .single(&[
+                            "ALTER SYSTEM SET fsync = 'on'",
+                            "ALTER SYSTEM SET full_page_writes = 'on'",
+                        ])
+                        .map(|_output| ()),
+                },
+                |cluster| {
+                    check_exit(
+                        cluster
+                            .shell(&database.name)
+                            .wrap_err("Starting PostgreSQL shell in cluster failed")?,
+                    )
+                },
             )
-        }),
+        }
         cli::Commands::Exec {
+            cluster,
             database,
             command,
             args,
             lifecycle,
-        } => run(database.dir, &database.name, lifecycle.destroy, |cluster| {
-            check_exit(
-                cluster
-                    .exec(&database.name, command, &args)
-                    .wrap_err("Executing command in cluster failed")?,
-            )
-        }),
+        } => run(
+            cluster.dir,
+            &database.name,
+            lifecycle.destroy,
+            |_cluster| Ok(()),
+            |cluster| {
+                check_exit(
+                    cluster
+                        .exec(&database.name, command, &args)
+                        .wrap_err("Executing command in cluster failed")?,
+                )
+            },
+        ),
         cli::Commands::Runtimes => {
             let runtimes_on_path = runtime::Runtime::find_on_path();
 
@@ -83,9 +135,16 @@ fn check_exit(status: ExitStatus) -> Result<i32> {
 
 const UUID_NS: uuid::Uuid = uuid::Uuid::from_u128(93875103436633470414348750305797058811);
 
-fn run<F>(database_dir: PathBuf, database_name: &str, destroy: bool, action: F) -> Result<i32>
+fn run<INIT, ACTION>(
+    database_dir: PathBuf,
+    database_name: &str,
+    destroy: bool,
+    initialise: INIT,
+    action: ACTION,
+) -> Result<i32>
 where
-    F: FnOnce(&cluster::Cluster) -> Result<i32> + std::panic::UnwindSafe,
+    INIT: std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::ClusterError>,
+    ACTION: FnOnce(&cluster::Cluster) -> Result<i32> + std::panic::UnwindSafe,
 {
     // Create the cluster directory first.
     match fs::create_dir(&database_dir) {
@@ -119,7 +178,7 @@ where
         coordinate::run_and_stop
     };
 
-    runner(&cluster, lock, || {
+    runner(&cluster, lock, initialise, |cluster: &cluster::Cluster| {
         if !cluster
             .databases()
             .wrap_err("Could not list databases")?
@@ -137,6 +196,6 @@ where
         ctrlc::set_handler(|| ()).wrap_err("Could not set signal handler")?;
 
         // Finally, run the given action.
-        action(&cluster)
+        action(cluster)
     })?
 }

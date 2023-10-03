@@ -17,6 +17,9 @@ pub enum Commands {
     #[clap(display_order = 1)]
     Shell {
         #[clap(flatten)]
+        cluster: ClusterArgs,
+
+        #[clap(flatten)]
         database: DatabaseArgs,
 
         #[clap(flatten)]
@@ -27,6 +30,9 @@ pub enum Commands {
     /// necessary.
     #[clap(display_order = 2)]
     Exec {
+        #[clap(flatten)]
+        cluster: ClusterArgs,
+
         #[clap(flatten)]
         database: DatabaseArgs,
 
@@ -50,7 +56,7 @@ pub enum Commands {
 }
 
 #[derive(Args)]
-pub struct DatabaseArgs {
+pub struct ClusterArgs {
     /// The directory in which to place, or find, the cluster.
     #[clap(
         short = 'D',
@@ -62,6 +68,43 @@ pub struct DatabaseArgs {
     )]
     pub dir: PathBuf,
 
+    /// Run the cluster in a "faster" mode.
+    ///
+    /// This disables `fsync` and `full_page_writes` in the cluster. This can
+    /// make the cluster faster but it can also lead to unrecoverable data
+    /// corruption in the event of a power failure or system crash. Useful for
+    /// tests, for example, but probably not production.
+    ///
+    /// In the future this may make additional or different changes. See
+    /// https://www.postgresql.org/docs/16/runtime-config-wal.html for more
+    /// information.
+    ///
+    /// This option is STICKY. Once you've used it, the cluster will be
+    /// configured to be "faster but less safe" and you do not need to specify
+    /// it again. To find out if the cluster is running in this mode, open a
+    /// `psql` shell (e.g. `postgresfixture shell`) and run `SHOW fsync;` and
+    /// `SHOW full_page_writes;`.
+    #[clap(long = "faster-but-less-safe", action = clap::ArgAction::SetTrue, default_value_t = false, display_order = 2)]
+    pub faster: bool,
+
+    /// Run the cluster in a "safer" mode.
+    ///
+    /// This is the opposite of `--faster-but-less-safe`, i.e. it runs with
+    /// `fsync` and `full_page_writes` enabled in the cluster. This is the
+    /// default when neither `--faster-but-less-safe` nor `--safe-but-slower`
+    /// have been specified.
+    ///
+    /// This option is STICKY. Once you've used it, the cluster will be
+    /// configured to be "slower and safer" and you do not need to specify it
+    /// again. To find out if the cluster is running in this mode, open a `psql`
+    /// shell (e.g. `postgresfixture shell`) and run `SHOW fsync;` and `SHOW
+    /// full_page_writes;`.
+    #[clap(long = "slower-but-safer", action = clap::ArgAction::SetTrue, default_value_t = false, display_order = 3, conflicts_with = "faster")]
+    pub slower: bool,
+}
+
+#[derive(Args)]
+pub struct DatabaseArgs {
     /// The database to connect to.
     #[clap(
         short = 'd',
@@ -73,6 +116,7 @@ pub struct DatabaseArgs {
     )]
     pub name: String,
 }
+
 #[derive(Args)]
 pub struct LifecycleArgs {
     /// Destroy the cluster after use. WARNING: This will DELETE THE DATA
