@@ -76,10 +76,10 @@ pub struct ClusterArgs {
 
     /// Run the cluster in a "faster" mode.
     ///
-    /// This disables `fsync` and `full_page_writes` in the cluster. This can
-    /// make the cluster faster but it can also lead to unrecoverable data
-    /// corruption in the event of a power failure or system crash. Useful for
-    /// tests, for example, but probably not production.
+    /// This disables `fsync`, `full_page_writes`, and `synchronous_commit` in
+    /// the cluster. This can make the cluster faster but it can also lead to
+    /// unrecoverable data corruption in the event of a power failure or system
+    /// crash. Useful for tests, for example, but probably not production.
     ///
     /// In the future this may make additional or different changes. See
     /// https://www.postgresql.org/docs/16/runtime-config-wal.html for more
@@ -88,23 +88,27 @@ pub struct ClusterArgs {
     /// This option is STICKY. Once you've used it, the cluster will be
     /// configured to be "faster but less safe" and you do not need to specify
     /// it again. To find out if the cluster is running in this mode, open a
-    /// `psql` shell (e.g. `postgresfixture shell`) and run `SHOW fsync;` and
-    /// `SHOW full_page_writes;`.
+    /// `psql` shell (e.g. `postgresfixture shell`) and run `SHOW fsync; SHOW
+    /// full_page_writes; SHOW synchronous_commit;`.
     #[clap(long = "faster-but-less-safe", action = clap::ArgAction::SetTrue, default_value_t = false, display_order = 2)]
     pub faster: bool,
 
     /// Run the cluster in a "safer" mode.
     ///
     /// This is the opposite of `--faster-but-less-safe`, i.e. it runs with
-    /// `fsync` and `full_page_writes` enabled in the cluster. This is the
-    /// default when neither `--faster-but-less-safe` nor `--safe-but-slower`
-    /// have been specified.
+    /// `fsync`, `full_page_writes`, and `synchronous_commit` enabled in the
+    /// cluster.
+    ///
+    /// NOTE: this actually *resets* the `fsync`, `full_page_writes`, and
+    /// `synchronous_commit` settings to their defaults. Unless they've been
+    /// configured differently in the cluster's `postgresql.conf`, the default
+    /// for these settings is on/enabled.
     ///
     /// This option is STICKY. Once you've used it, the cluster will be
     /// configured to be "slower and safer" and you do not need to specify it
     /// again. To find out if the cluster is running in this mode, open a `psql`
-    /// shell (e.g. `postgresfixture shell`) and run `SHOW fsync;` and `SHOW
-    /// full_page_writes;`.
+    /// shell (e.g. `postgresfixture shell`) and run `SHOW fsync; SHOW
+    /// full_page_writes; SHOW synchronous_commit;`.
     #[clap(long = "slower-but-safer", action = clap::ArgAction::SetTrue, default_value_t = false, display_order = 3, conflicts_with = "faster")]
     pub slower: bool,
 }
