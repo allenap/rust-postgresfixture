@@ -16,7 +16,7 @@ use std::{error, fmt, num};
 
 use regex::Regex;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Version {
     Pre10(u32, u32, u32),
     Post10(u32, u32),
