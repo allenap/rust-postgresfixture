@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use regex::Regex;
 
-use super::VersionError;
+use super::{Version, VersionError};
 
 #[derive(Copy, Clone, Debug)]
 pub enum PartialVersion {
@@ -17,6 +17,43 @@ pub enum PartialVersion {
 }
 
 impl PartialVersion {
+    /// Is the given [`Version`] compatible with this [`PartialVersion`]?
+    ///
+    /// Put another way: can a server of the given [`Version`] be used to run a
+    /// cluster of this [`PartialVersion`]?
+    ///
+    /// This is an interesting question to answer, because clusters contain a
+    /// file named `PG_VERSION` which containing the major version number of the
+    /// cluster's files, e.g. "15" or "9.6".
+    ///
+    /// For versions of PostgreSQL before 10, this means that the given
+    /// version's major and minor numbers must match exactly, and the patch
+    /// number must be greater than or equal to this `PartialVersion`'s patch
+    /// number. When this `PartialVersion` has no minor or patch number, the
+    /// given version is assumed to be compatible.
+    ///
+    /// For versions of PostgreSQL after and including 10, this means that the
+    /// given version's major number must match exactly, and the minor number
+    /// must be greater than or equal to this `PartialVersion`'s minor number.
+    /// When this `PartialVersion` has no minor number, the given version is
+    /// assumed to be compatible. The patch number is ignored.
+    #[allow(dead_code)]
+    pub fn compatible(&self, version: Version) -> bool {
+        use PartialVersion::*;
+        match version {
+            Version::Pre10(va, vb, vc) => match *self {
+                Mmp(a, b, c) => a == va && b == vb && c <= vc,
+                Mm(a, b) => a == va && b == vb,
+                M(a) => a == va,
+            },
+            Version::Post10(va, vb) => match *self {
+                Mmp(a, b, _) => a == va && b <= vb,
+                Mm(a, b) => a == va && b <= vb,
+                M(a) => a == va,
+            },
+        }
+    }
+
     /// Provide a sort key that implements [`Ord`].
     ///
     /// `PartialVersion` does not implement [`Eq`] or [`Ord`] because they would
@@ -125,6 +162,34 @@ mod tests {
     #[test]
     fn displays_version_above_10() {
         assert_eq!("12.2", format!("{}", Mm(12, 2)));
+    }
+
+    #[test]
+    fn compatible_below_10() {
+        assert!(Mmp(9, 6, 17).compatible("9.6.17".parse().unwrap()));
+        assert!(Mm(9, 6).compatible("9.6.17".parse().unwrap()));
+        assert!(M(9).compatible("9.6.17".parse().unwrap()));
+    }
+
+    #[test]
+    fn not_compatible_below_10() {
+        assert!(!Mmp(9, 6, 17).compatible("9.6.16".parse().unwrap()));
+        assert!(!Mm(9, 6).compatible("9.5.17".parse().unwrap()));
+        assert!(!M(9).compatible("8.6.17".parse().unwrap()));
+    }
+
+    #[test]
+    fn compatible_above_10() {
+        assert!(Mmp(12, 6, 1234).compatible("12.6".parse().unwrap()));
+        assert!(Mm(13, 2).compatible("13.2".parse().unwrap()));
+        assert!(M(14).compatible("14.7".parse().unwrap()));
+    }
+
+    #[test]
+    fn not_compatible_above_10() {
+        assert!(!Mmp(12, 6, 1234).compatible("12.5".parse().unwrap()));
+        assert!(!Mm(13, 2).compatible("13.1".parse().unwrap()));
+        assert!(!M(14).compatible("13.7".parse().unwrap()));
     }
 
     #[test]
