@@ -11,6 +11,10 @@
 //!
 //! [versioning]: https://www.postgresql.org/support/versioning/
 
+// TODO: Parse `server_version_num`/`PG_VERSION_NUM`, e.g. 120007 for version
+// 12.7, 90624 for 9.6.24. See https://pgpedia.info/s/server_version_num.html
+// and https://www.postgresql.org/docs/16/runtime-config-preset.html.
+
 use std::fmt;
 use std::str::FromStr;
 

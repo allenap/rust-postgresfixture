@@ -53,12 +53,18 @@ fn main() -> Result<()> {
                 )
             },
         ),
-        cli::Commands::Runtimes => {
-            let runtimes_on_path = runtime::Runtime::find_on_path();
+        cli::Commands::Runtimes { platform } => {
+            let runtimes_found = {
+                let mut runtimes = runtime::Runtime::find_on_path();
+                if platform {
+                    runtimes.extend(runtime::Runtime::find_on_platform())
+                }
+                runtimes
+            };
 
             // Get version for each runtime. Throw away errors.
-            let mut runtimes: Vec<_> = runtimes_on_path
-                .iter()
+            let mut runtimes: Vec<_> = runtimes_found
+                .into_iter()
                 .zip(iter::once(true).chain(iter::repeat(false)))
                 .filter_map(|(runtime, default)| match runtime.version() {
                     Ok(version) => Some((version, runtime, default)),
@@ -78,6 +84,7 @@ fn main() -> Result<()> {
                     None => println!("{default:2} {version:10?} <???>",),
                 }
             }
+
             Ok(0)
         }
     };
@@ -130,10 +137,7 @@ where
         .wrap_err("Could not create UUID-based lock file")
         .with_section(|| lock_uuid.to_string().header("UUID for lock file:"))?;
 
-    // For now use the default PostgreSQL runtime.
-    let runtime = runtime::Runtime::default();
-    let cluster = cluster::Cluster::new(&database_dir, runtime);
-
+    let cluster = cluster::Cluster::at(database_dir)?;
     let runner = if destroy {
         coordinate::run_and_destroy
     } else {

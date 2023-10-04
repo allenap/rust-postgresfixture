@@ -19,6 +19,7 @@ pub enum ClusterError {
     UnixError(nix::Error),
     UnsupportedVersion(version::Version),
     UnknownVersion(version::VersionError),
+    RuntimeNotFound(version::PartialVersion),
     DatabaseError(postgres::error::Error),
     InUse, // Cluster is already in use; cannot lock exclusively.
     Other(Output),
@@ -33,6 +34,7 @@ impl fmt::Display for ClusterError {
             UnixError(ref e) => write!(fmt, "UNIX error: {}", e),
             UnsupportedVersion(ref e) => write!(fmt, "PostgreSQL version not supported: {}", e),
             UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {}", e),
+            RuntimeNotFound(ref v) => write!(fmt, "PostgreSQL runtime not found for version {v}"),
             DatabaseError(ref e) => write!(fmt, "database error: {}", e),
             InUse => write!(fmt, "cluster in use; cannot lock exclusively"),
             Other(ref e) => write!(fmt, "external command failed: {:?}", e),
@@ -48,6 +50,7 @@ impl error::Error for ClusterError {
             ClusterError::UnixError(ref error) => Some(error),
             ClusterError::UnsupportedVersion(_) => None,
             ClusterError::UnknownVersion(ref error) => Some(error),
+            ClusterError::RuntimeNotFound(_) => None,
             ClusterError::DatabaseError(ref error) => Some(error),
             ClusterError::InUse => None,
             ClusterError::Other(_) => None,
@@ -105,11 +108,36 @@ pub struct Cluster {
 }
 
 impl Cluster {
+    /// Represent a cluster at the given path with the given runtime.
     pub fn new<P: AsRef<Path>>(datadir: P, runtime: runtime::Runtime) -> Self {
         Self {
             datadir: datadir.as_ref().to_path_buf(),
             runtime,
         }
+    }
+
+    /// Represent a cluster at the given path. If there is a cluster there, this
+    /// will try to determine an appropriate runtime to use with it. It will
+    /// prefer to [find a matching runtime on `PATH`][`crate::runtime::Runtime::find_on_path`],
+    /// but will also try to find a runtime using [platform-specific
+    /// logic][`crate::runtime::Runtime::find_on_platform`].
+    pub fn at<P: AsRef<Path>>(datadir: P) -> Result<Self, ClusterError> {
+        use runtime::{determine_best_runtime_for_version, Runtime};
+        let datadir = datadir.as_ref();
+        let version = version(datadir)?;
+        let runtime = match version {
+            None => Default::default(),
+            Some(version) => {
+                let runtimes = Runtime::find_on_path().into_iter();
+                determine_best_runtime_for_version(&version, runtimes)
+                    .or_else(|| {
+                        let runtimes = Runtime::find_on_platform().into_iter();
+                        determine_best_runtime_for_version(&version, runtimes)
+                    })
+                    .ok_or_else(|| ClusterError::RuntimeNotFound(version))?
+            }
+        };
+        Ok(Self::new(datadir, runtime))
     }
 
     fn ctl(&self) -> Command {
@@ -125,20 +153,11 @@ impl Cluster {
         self.datadir.is_dir() && self.datadir.join("PG_VERSION").is_file()
     }
 
-    /// Returns the PostgreSQL version in use by a cluster.
+    /// Returns the PostgreSQL version in use by this cluster.
     ///
-    /// This returns the version from the file named `PG_VERSION` in the data
-    /// directory if it exists, otherwise this returns `None`. For PostgreSQL
-    /// versions before 10 this is typically (maybe always) the major and point
-    /// version, e.g. 9.4 rather than 9.4.26. For version 10 and above it
-    /// appears to be just the major number, e.g. 14 rather than 14.2.
+    /// See [`version()`] for more details.
     pub fn version(&self) -> Result<Option<version::PartialVersion>, ClusterError> {
-        let version_file = self.datadir.join("PG_VERSION");
-        match std::fs::read_to_string(version_file) {
-            Ok(version) => Ok(Some(version.parse()?)),
-            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(err) => Err(err)?,
-        }
+        version(&self.datadir)
     }
 
     /// Check if this cluster is running.
@@ -437,6 +456,24 @@ impl Cluster {
         } else {
             Ok(false)
         }
+    }
+}
+
+/// Returns the PostgreSQL version in use by a cluster.
+///
+/// This returns the version from the file named `PG_VERSION` in the data
+/// directory if it exists, otherwise this returns `None`. For PostgreSQL
+/// versions before 10 this is typically (maybe always) the major and point
+/// version, e.g. 9.4 rather than 9.4.26. For version 10 and above it appears to
+/// be just the major number, e.g. 14 rather than 14.2.
+pub fn version<P: AsRef<Path>>(
+    datadir: P,
+) -> Result<Option<version::PartialVersion>, ClusterError> {
+    let version_file = datadir.as_ref().join("PG_VERSION");
+    match std::fs::read_to_string(version_file) {
+        Ok(version) => Ok(Some(version.parse()?)),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(err)?,
     }
 }
 
