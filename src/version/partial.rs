@@ -69,7 +69,7 @@ impl FromStr for PartialVersion {
     type Err = VersionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"(?x) \b (\d+) (?: [.] (\d+) )? (?: [.] (\d+) )? \b").unwrap();
+        let re = Regex::new(r"(?x) \b (\d+) (?: [.] (\d+) (?: [.] (\d+) )? )? \b").unwrap();
         match re.captures(s) {
             Some(caps) => match (
                 caps.get(1).and_then(|n| n.as_str().parse::<u32>().ok()),
