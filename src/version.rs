@@ -9,7 +9,7 @@
 //! See <https://www.postgresql.org/support/versioning/> for information on
 //! PostgreSQL's versioning scheme.
 
-mod partial;
+pub mod partial;
 
 use std::str::FromStr;
 use std::{error, fmt, num};

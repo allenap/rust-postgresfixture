@@ -6,11 +6,25 @@ use regex::Regex;
 
 use super::{Version, VersionError};
 
+/// Represents a PostgreSQL version with some parts missing. This is the kind of
+/// thing we might find in a cluster's `PG_VERSION` file.
 #[derive(Copy, Clone, Debug)]
 pub enum PartialVersion {
+    /// Pre-PostgreSQL 10, with major and minor version numbers, e.g. 9.6. It is
+    /// an error to create this variant with a major number >= 10; see
+    /// [`checked`][`Self::checked`] for a way to guard against this.
     Pre10m(u32, u32),
+    /// Pre-PostgreSQL 10, with major, minor, and patch version numbers, e.g.
+    /// 9.6.17. It is an error to create this variant with a major number >= 10;
+    /// see [`checked`][`Self::checked`] for a way to guard against this.
     Pre10mm(u32, u32, u32),
+    /// PostgreSQL 10+, with major version number, e.g. 10. It is an error to
+    /// create this variant with a major number < 10; see
+    /// [`checked`][`Self::checked`] for a way to guard against this.
     Post10m(u32),
+    /// PostgreSQL 10+, with major and minor version number, e.g. 10.3. It is an
+    /// error to create this variant with a major number < 10; see
+    /// [`checked`][`Self::checked`] for a way to guard against this.
     Post10mm(u32, u32),
 }
 
@@ -32,7 +46,48 @@ impl From<&PartialVersion> for Version {
     }
 }
 
+/// See `From<&PartialVersion> for Version`.
+impl From<PartialVersion> for Version {
+    fn from(partial: PartialVersion) -> Self {
+        (&partial).into()
+    }
+}
+
+/// Convert a [`Version`] into a [`PartialVersion`].
+impl From<&Version> for PartialVersion {
+    fn from(version: &Version) -> Self {
+        use Version::*;
+        match *version {
+            Pre10(a, b, c) => PartialVersion::Pre10mm(a, b, c),
+            Post10(a, b) => PartialVersion::Post10mm(a, b),
+        }
+    }
+}
+
+/// See `From<&Version> for PartialVersion`.
+impl From<Version> for PartialVersion {
+    fn from(version: Version) -> Self {
+        (&version).into()
+    }
+}
+
 impl PartialVersion {
+    /// Return self if it is a valid [`PartialVersion`].
+    ///
+    /// This can be necessary when a [`PartialVersion`] has been constructed
+    /// directly. It checks that [`PartialVersion::Pre10m`] and
+    /// [`PartialVersion::Pre10mm`] have a major version number less than 10,
+    /// and that [`PartialVersion::Post10m`] and [`PartialVersion::Post10mm`]
+    /// have a major version number greater than or equal to 10.
+    pub fn checked(self) -> Result<Self, VersionError> {
+        use PartialVersion::*;
+        match self {
+            Pre10m(a, ..) | Pre10mm(a, ..) if a < 10 => Ok(self),
+            Post10m(a) | Post10mm(a, ..) if a >= 10 => Ok(self),
+            _ => Err(VersionError::BadlyFormed),
+        }
+    }
+
     /// Is the given [`Version`] compatible with this [`PartialVersion`]?
     ///
     /// Put another way: can a server of the given [`Version`] be used to run a
@@ -65,12 +120,22 @@ impl PartialVersion {
         }
     }
 
+    /// Remove minor/patch number.
+    pub fn widened(&self) -> PartialVersion {
+        use PartialVersion::*;
+        match self {
+            Pre10mm(a, b, _) => Pre10m(*a, *b),
+            Post10mm(a, _) => Post10m(*a),
+            _ => *self,
+        }
+    }
+
     /// Provide a sort key that implements [`Ord`].
     ///
     /// `PartialVersion` does not implement [`Eq`] or [`Ord`] because they would
     /// disagree with its [`PartialEq`] and [`PartialOrd`] implementations, so
     /// this function provides a sort key that implements [`Ord`] and can be
-    /// used with sorting functions, e.g. [`Vec::sort_by`].
+    /// used with sorting functions, e.g. [`slice::sort_by_key`].
     #[allow(dead_code)]
     pub fn sort_key(&self) -> (u32, Option<u32>, Option<u32>) {
         use PartialVersion::*;
@@ -119,9 +184,9 @@ impl PartialOrd for PartialVersion {
 impl fmt::Display for PartialVersion {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Self::Pre10m(a, b) => fmt.pad(&format!("{a}.{b}.*")),
+            Self::Pre10m(a, b) => fmt.pad(&format!("{a}.{b}")),
             Self::Pre10mm(a, b, c) => fmt.pad(&format!("{a}.{b}.{c}")),
-            Self::Post10m(a) => fmt.pad(&format!("{a}.*")),
+            Self::Post10m(a) => fmt.pad(&format!("{a}")),
             Self::Post10mm(a, b) => fmt.pad(&format!("{a}.{b}")),
         }
     }
@@ -151,7 +216,7 @@ impl FromStr for PartialVersion {
 
 #[cfg(test)]
 mod tests {
-    use super::super::VersionError::*;
+    use super::super::{Version, VersionError::*};
     use super::{PartialVersion, PartialVersion::*};
 
     use rand::seq::SliceRandom;
@@ -185,15 +250,41 @@ mod tests {
     }
 
     #[test]
+    fn checked_returns_self_when_variant_is_valid() {
+        use PartialVersion::*;
+        assert_eq!(Ok(Pre10m(9, 0)), Pre10m(9, 0).checked());
+        assert_eq!(Ok(Pre10mm(9, 0, 0)), Pre10mm(9, 0, 0).checked());
+        assert_eq!(Ok(Post10m(10)), Post10m(10).checked());
+        assert_eq!(Ok(Post10mm(10, 0)), Post10mm(10, 0).checked());
+    }
+
+    #[test]
+    fn checked_returns_error_when_variant_is_invalid() {
+        use PartialVersion::*;
+        assert_eq!(Err(BadlyFormed), Pre10m(10, 0).checked());
+        assert_eq!(Err(BadlyFormed), Pre10mm(10, 0, 0).checked());
+        assert_eq!(Err(BadlyFormed), Post10m(9).checked());
+        assert_eq!(Err(BadlyFormed), Post10mm(9, 0).checked());
+    }
+
+    #[test]
     fn displays_version_below_10() {
         assert_eq!("9.6.17", format!("{}", Pre10mm(9, 6, 17)));
-        assert_eq!("9.6.*", format!("{}", Pre10m(9, 6)));
+        assert_eq!("9.6", format!("{}", Pre10m(9, 6)));
     }
 
     #[test]
     fn displays_version_above_10() {
         assert_eq!("12.2", format!("{}", Post10mm(12, 2)));
-        assert_eq!("12.*", format!("{}", Post10m(12)));
+        assert_eq!("12", format!("{}", Post10m(12)));
+    }
+
+    #[test]
+    fn converts_partial_version_to_version() {
+        assert_eq!(Version::Pre10(9, 1, 2), Pre10mm(9, 1, 2).into());
+        assert_eq!(Version::Pre10(9, 1, 0), Pre10m(9, 1).into());
+        assert_eq!(Version::Post10(14, 2), Post10mm(14, 2).into());
+        assert_eq!(Version::Post10(14, 0), Post10m(14).into());
     }
 
     #[test]
@@ -236,6 +327,14 @@ mod tests {
         let version = "9.1.2".parse().unwrap();
         assert!(!Post10m(12).compatible(version));
         assert!(!Post10mm(12, 6).compatible(version));
+    }
+
+    #[test]
+    fn widened_removes_minor_or_patch_number() {
+        assert_eq!(Pre10mm(9, 1, 2), Pre10m(9, 1));
+        assert_eq!(Post10mm(12, 9), Post10m(12));
+        assert_eq!(Pre10m(9, 1), Pre10m(9, 1));
+        assert_eq!(Post10m(12), Post10m(12));
     }
 
     #[test]
