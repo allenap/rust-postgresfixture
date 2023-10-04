@@ -6,13 +6,50 @@
 //! can traverse your `PATH` to discover all the versions currently available to
 //! you.
 
-use std::env;
 use std::ffi::OsStr;
-use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{env, error, fmt, io};
 
 use crate::util;
+use crate::version;
+
+#[derive(Debug)]
+pub enum RuntimeError {
+    IoError(io::Error),
+    UnknownVersion(version::VersionError),
+}
+
+impl fmt::Display for RuntimeError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        use RuntimeError::*;
+        match *self {
+            IoError(ref e) => write!(fmt, "input/output error: {}", e),
+            UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {}", e),
+        }
+    }
+}
+
+impl error::Error for RuntimeError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        match *self {
+            RuntimeError::IoError(ref error) => Some(error),
+            RuntimeError::UnknownVersion(ref error) => Some(error),
+        }
+    }
+}
+
+impl From<io::Error> for RuntimeError {
+    fn from(error: io::Error) -> RuntimeError {
+        RuntimeError::IoError(error)
+    }
+}
+
+impl From<version::VersionError> for RuntimeError {
+    fn from(error: version::VersionError) -> RuntimeError {
+        RuntimeError::UnknownVersion(error)
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct Runtime {
@@ -57,13 +94,13 @@ impl Runtime {
     /// numbers are **not** SemVer compatible. The [`version`][`crate::version`]
     /// module in this crate can parse the version string returned by this
     /// function.
-    pub fn version(&self) -> Result<String, io::Error> {
+    pub fn version(&self) -> Result<version::Version, RuntimeError> {
         // Execute pg_ctl and extract version.
         let version_output = self.execute("pg_ctl").arg("--version").output()?;
         let version_string = String::from_utf8_lossy(&version_output.stdout);
         // The version parser can deal with leading garbage, i.e. it can parse
         // "pg_ctl (PostgreSQL) 12.2" and get 12.2 out of it.
-        Ok(version_string.into())
+        Ok(version_string.parse()?)
     }
 
     /// Return a [`Command`] prepped to run the given `program` in this

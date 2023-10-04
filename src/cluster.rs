@@ -79,6 +79,15 @@ impl From<postgres::error::Error> for ClusterError {
     }
 }
 
+impl From<runtime::RuntimeError> for ClusterError {
+    fn from(error: runtime::RuntimeError) -> ClusterError {
+        match error {
+            runtime::RuntimeError::IoError(error) => ClusterError::IoError(error),
+            runtime::RuntimeError::UnknownVersion(error) => ClusterError::UnknownVersion(error),
+        }
+    }
+}
+
 /// Representation of a PostgreSQL cluster.
 ///
 /// The cluster may not yet exist on disk. It may exist but be stopped, or it
@@ -146,7 +155,7 @@ impl Cluster {
             // More work required to decode what this means.
             Some(code) => code,
         };
-        let version = self.runtime.version()?.parse()?;
+        let version = self.runtime.version()?;
         // PostgreSQL has evolved to return different error codes in
         // later versions, so here we check for specific codes to avoid
         // masking errors from insufficient permissions or missing
@@ -490,7 +499,7 @@ mod tests {
         File::create(&version_file).unwrap();
         for runtime in Runtime::find_on_path() {
             println!("{:?}", runtime);
-            let version: PartialVersion = runtime.version().unwrap().parse().unwrap();
+            let version: PartialVersion = runtime.version().unwrap().into();
             let version = version.widened();
             std::fs::write(&version_file, format!("{version}\n")).unwrap();
             let cluster = Cluster::new(&data_dir, runtime);
@@ -555,9 +564,7 @@ mod tests {
             //   but it won't output it.
             //     -- https://www.postgresql.org/docs/9.4/release-9-4-22.html
             //
-            if runtime.version().unwrap().parse::<Version>().unwrap()
-                < Version::from_str("9.4.22").unwrap()
-            {
+            if runtime.version().unwrap() < Version::from_str("9.4.22").unwrap() {
                 let dealias = |tz: &String| (if tz == "UCT" { "UTC" } else { tz }).to_owned();
                 assert_eq!(params.get("TimeZone").map(dealias), Some("UTC".into()));
                 assert_eq!(params.get("log_timezone").map(dealias), Some("UTC".into()));
@@ -572,9 +579,7 @@ mod tests {
             //   them as read-only server variables was unhelpful.
             //     -- https://www.postgresql.org/docs/16/release-16.html
             //
-            if runtime.version().unwrap().parse::<Version>().unwrap()
-                >= Version::from_str("16.0").unwrap()
-            {
+            if runtime.version().unwrap() >= Version::from_str("16.0").unwrap() {
                 assert_eq!(params.get("lc_collate"), None);
                 assert_eq!(params.get("lc_ctype"), None);
                 // 🚨 Also in PostgreSQL 16, lc_messages is now the empty string
