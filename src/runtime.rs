@@ -205,6 +205,21 @@ impl Runtime {
     }
 }
 
+pub fn determine_best_runtime_for_version<RUNTIMES>(
+    version: &version::PartialVersion,
+    runtimes: RUNTIMES,
+) -> Option<Runtime>
+where
+    RUNTIMES: IntoIterator<Item = Runtime>,
+{
+    runtimes
+        .into_iter()
+        .filter_map(|runtime| runtime.version().map(|rtv| (rtv, runtime)).ok())
+        .filter(|(rtv, _)| version.compatible(*rtv))
+        .max_by(|(v1, _), (v2, _)| v1.cmp(v2))
+        .map(|(_, runtime)| runtime)
+}
+
 #[cfg(test)]
 mod tests {
     use super::Runtime;

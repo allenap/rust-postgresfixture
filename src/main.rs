@@ -137,10 +137,7 @@ where
         .wrap_err("Could not create UUID-based lock file")
         .with_section(|| lock_uuid.to_string().header("UUID for lock file:"))?;
 
-    // For now use the default PostgreSQL runtime.
-    let runtime = runtime::Runtime::default();
-    let cluster = cluster::Cluster::new(&database_dir, runtime);
-
+    let cluster = cluster::Cluster::at(database_dir)?;
     let runner = if destroy {
         coordinate::run_and_destroy
     } else {
