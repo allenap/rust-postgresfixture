@@ -6,8 +6,10 @@
 //! assert_eq!(Ok(Version::Post10(14, 6)), "14.6".parse());
 //! ```
 //!
-//! See <https://www.postgresql.org/support/versioning/> for information on
+//! See the [PostgreSQL "Versioning Policy" page][versioning] for information on
 //! PostgreSQL's versioning scheme.
+//!
+//! [versioning]: https://www.postgresql.org/support/versioning/
 
 pub mod partial;
 

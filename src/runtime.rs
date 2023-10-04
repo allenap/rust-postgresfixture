@@ -88,7 +88,7 @@ impl Runtime {
         }
     }
 
-    /// Get the version string of PostgreSQL from `pg_ctl`.
+    /// Get the version of PostgreSQL from `pg_ctl`.
     ///
     /// <https://www.postgresql.org/support/versioning/> shows that version
     /// numbers are **not** SemVer compatible. The [`version`][`crate::version`]
