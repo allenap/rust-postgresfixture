@@ -132,7 +132,7 @@ impl Cluster {
     /// versions before 10 this is typically (maybe always) the major and point
     /// version, e.g. 9.4 rather than 9.4.26. For version 10 and above it
     /// appears to be just the major number, e.g. 14 rather than 14.2.
-    pub fn version(&self) -> Result<Option<version::partial::PartialVersion>, ClusterError> {
+    pub fn version(&self) -> Result<Option<version::PartialVersion>, ClusterError> {
         let version_file = self.datadir.join("PG_VERSION");
         match std::fs::read_to_string(version_file) {
             Ok(version) => Ok(Some(version.parse()?)),
@@ -444,8 +444,7 @@ impl Cluster {
 mod tests {
     use super::Cluster;
     use crate::runtime::Runtime;
-    use crate::version::partial::PartialVersion;
-    use crate::version::Version;
+    use crate::version::{PartialVersion, Version};
 
     use std::collections::HashSet;
     use std::fs::File;
