@@ -6,11 +6,29 @@ use regex::Regex;
 
 use super::VersionError;
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum PartialVersion {
     A(u32, u32, u32),
     B(u32, u32),
     C(u32),
+}
+
+impl PartialVersion {
+    /// Provide a sort key that implements [`Ord`].
+    ///
+    /// `PartialVersion` does not implement [`Eq`] or [`Ord`] because they would
+    /// disagree with its [`PartialEq`] and [`PartialOrd`] implementations, so
+    /// this function provides a sort key that implements [`Ord`] and can be
+    /// used with sorting functions, e.g. [`Vec::sort_by`].
+    #[allow(dead_code)]
+    pub fn sort_key(&self) -> (u32, Option<u32>, Option<u32>) {
+        use PartialVersion::*;
+        match self {
+            A(a, b, c) => (*a, Some(*b), Some(*c)),
+            B(a, b) => (*a, Some(*b), None),
+            C(a) => (*a, None, None),
+        }
+    }
 }
 
 impl PartialEq for PartialVersion {
@@ -19,38 +37,19 @@ impl PartialEq for PartialVersion {
     }
 }
 
-impl Eq for PartialVersion {}
-
 impl PartialOrd for PartialVersion {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         use PartialVersion::*;
-        match (self, other) {
+        match (*self, *other) {
             (A(x1, x2, x3), A(y1, y2, y3)) => (x1, x2, x3).partial_cmp(&(y1, y2, y3)),
-            (A(x1, x2, x3), B(y1, y2)) => (x1, x2, x3).partial_cmp(&(y1, y2, &0)),
-            (A(x1, x2, x3), C(y1)) => (x1, x2, x3).partial_cmp(&(y1, &0, &0)),
-            (B(x1, x2), A(y1, y2, y3)) => (x1, x2, &0).partial_cmp(&(y1, y2, y3)),
+            (A(x1, x2, x3), B(y1, y2)) => (x1, x2, x3).partial_cmp(&(y1, y2, 0)),
+            (A(x1, x2, x3), C(y1)) => (x1, x2, x3).partial_cmp(&(y1, 0, 0)),
+            (B(x1, x2), A(y1, y2, y3)) => (x1, x2, 0).partial_cmp(&(y1, y2, y3)),
             (B(x1, x2), B(y1, y2)) => (x1, x2).partial_cmp(&(y1, y2)),
-            (B(x1, x2), C(y1)) => (x1, x2).partial_cmp(&(y1, &0)),
-            (C(x1), A(y1, y2, y3)) => (x1, &0, &0).partial_cmp(&(y1, y2, y3)),
-            (C(x1), B(y1, y2)) => (x1, &0).partial_cmp(&(y1, y2)),
-            (C(x1), C(y1)) => x1.partial_cmp(y1),
-        }
-    }
-}
-
-impl Ord for PartialVersion {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        use PartialVersion::*;
-        match (self, other) {
-            (A(x1, x2, x3), A(y1, y2, y3)) => (x1, x2, x3).cmp(&(y1, y2, y3)),
-            (A(x1, x2, x3), B(y1, y2)) => (x1, x2, x3).cmp(&(y1, y2, &0)),
-            (A(x1, x2, x3), C(y1)) => (x1, x2, x3).cmp(&(y1, &0, &0)),
-            (B(x1, x2), A(y1, y2, y3)) => (x1, x2, &0).cmp(&(y1, y2, y3)),
-            (B(x1, x2), B(y1, y2)) => (x1, x2).cmp(&(y1, y2)),
-            (B(x1, x2), C(y1)) => (x1, x2).cmp(&(y1, &0)),
-            (C(x1), A(y1, y2, y3)) => (x1, &0, &0).cmp(&(y1, y2, y3)),
-            (C(x1), B(y1, y2)) => (x1, &0).cmp(&(y1, y2)),
-            (C(x1), C(y1)) => x1.cmp(y1),
+            (B(x1, x2), C(y1)) => (x1, x2).partial_cmp(&(y1, 0)),
+            (C(x1), A(y1, y2, y3)) => (x1, 0, 0).partial_cmp(&(y1, y2, y3)),
+            (C(x1), B(y1, y2)) => (x1, 0).partial_cmp(&(y1, y2)),
+            (C(x1), C(y1)) => x1.partial_cmp(&y1),
         }
     }
 }
@@ -126,7 +125,7 @@ mod tests {
     }
 
     #[test]
-    fn derive_partial_ord_works_as_expected() {
+    fn partial_ord_works_as_expected() {
         let mut versions = vec![
             A(9, 10, 11),
             A(9, 10, 12),
@@ -160,10 +159,12 @@ mod tests {
     }
 
     #[test]
-    fn derive_ord_works_as_expected() {
+    fn sort_key_works_as_expected() {
         let mut versions = vec![
+            A(9, 0, 0),
             A(9, 10, 11),
             A(9, 10, 12),
+            B(9, 0),
             B(8, 11),
             B(9, 11),
             B(9, 12),
@@ -175,13 +176,15 @@ mod tests {
         let mut rng = thread_rng();
         for _ in 0..1000 {
             versions.shuffle(&mut rng);
-            versions.sort();
+            versions.sort_by_key(PartialVersion::sort_key);
             assert_eq!(
                 versions,
                 vec![
                     C(8),
                     B(8, 11),
                     C(9),
+                    B(9, 0),
+                    A(9, 0, 0),
                     A(9, 10, 11),
                     A(9, 10, 12),
                     B(9, 11),
