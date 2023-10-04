@@ -123,11 +123,12 @@ impl Cluster {
     /// versions before 10 this is typically (maybe always) the major and minor
     /// version, e.g. 9.4 rather than 9.4.26. For version 10 and above it
     /// appears to be just the major number, e.g. 14 rather than 14.2.
-    pub fn version(&self) -> Option<String> {
+    pub fn version(&self) -> Result<Option<version::partial::PartialVersion>, ClusterError> {
         let version_file = self.datadir.join("PG_VERSION");
         match std::fs::read_to_string(version_file) {
-            Ok(version) => Some(version.trim().to_owned()),
-            Err(_) => None,
+            Ok(version) => Ok(Some(version.parse()?)),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(err) => Err(err)?,
         }
     }
 
@@ -223,6 +224,8 @@ impl Cluster {
 
         match running {
             Some(running) => Ok(running),
+            // TODO: Perhaps include the exit code from `pg_ctl status` in the
+            // error message, and whatever it printed out.
             None => Err(ClusterError::UnsupportedVersion(version)),
         }
     }
@@ -432,6 +435,7 @@ impl Cluster {
 mod tests {
     use super::Cluster;
     use crate::runtime::Runtime;
+    use crate::version::partial::PartialVersion;
     use crate::version::Version;
 
     use std::collections::HashSet;
@@ -475,19 +479,22 @@ mod tests {
         for runtime in Runtime::find_on_path() {
             println!("{:?}", runtime);
             let cluster = Cluster::new("some/path", runtime);
-            assert_eq!(cluster.version(), None);
+            assert!(matches!(cluster.version(), Ok(None)));
         }
     }
 
     #[test]
-    fn cluster_has_version_when_it_does_exists() {
+    fn cluster_has_version_when_it_does_exist() {
         let data_dir = tempdir::TempDir::new("data").unwrap();
         let version_file = data_dir.path().join("PG_VERSION");
         File::create(&version_file).unwrap();
         for runtime in Runtime::find_on_path() {
             println!("{:?}", runtime);
+            let version: PartialVersion = runtime.version().unwrap().parse().unwrap();
+            let version = version.widened();
+            std::fs::write(&version_file, format!("{version}\n")).unwrap();
             let cluster = Cluster::new(&data_dir, runtime);
-            assert!(matches!(cluster.version(), Some(_)));
+            assert!(matches!(cluster.version(), Ok(Some(_))));
         }
     }
 
