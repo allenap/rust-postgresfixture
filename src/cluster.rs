@@ -129,7 +129,7 @@ impl Cluster {
     ///
     /// This returns the version from the file named `PG_VERSION` in the data
     /// directory if it exists, otherwise this returns `None`. For PostgreSQL
-    /// versions before 10 this is typically (maybe always) the major and minor
+    /// versions before 10 this is typically (maybe always) the major and point
     /// version, e.g. 9.4 rather than 9.4.26. For version 10 and above it
     /// appears to be just the major number, e.g. 14 rather than 14.2.
     pub fn version(&self) -> Result<Option<version::partial::PartialVersion>, ClusterError> {

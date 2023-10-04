@@ -8,14 +8,20 @@ use super::{Version, VersionError};
 
 /// Represents a PostgreSQL version with some parts missing. This is the kind of
 /// thing we might find in a cluster's `PG_VERSION` file.
+///
+/// The "Version" column on the [PostgreSQL "Versioning Policy"
+/// page][versioning] is roughly what this models, but this can also optionally
+/// represent the "Current minor" column too.
+///
+/// [versioning]: https://www.postgresql.org/support/versioning/
 #[derive(Copy, Clone, Debug)]
 pub enum PartialVersion {
-    /// Pre-PostgreSQL 10, with major and minor version numbers, e.g. 9.6. It is
+    /// Pre-PostgreSQL 10, with major and point version numbers, e.g. 9.6. It is
     /// an error to create this variant with a major number >= 10; see
     /// [`checked`][`Self::checked`] for a way to guard against this.
     Pre10m(u32, u32),
-    /// Pre-PostgreSQL 10, with major, minor, and patch version numbers, e.g.
-    /// 9.6.17. It is an error to create this variant with a major number >= 10;
+    /// Pre-PostgreSQL 10, with major, point, and minor version numbers, e.g.
+    /// 9.6.17. It is an error to create this variant with a major number >=§ 10;
     /// see [`checked`][`Self::checked`] for a way to guard against this.
     Pre10mm(u32, u32, u32),
     /// PostgreSQL 10+, with major version number, e.g. 10. It is an error to
@@ -94,14 +100,15 @@ impl PartialVersion {
     /// cluster of this [`PartialVersion`]?
     ///
     /// This is an interesting question to answer because clusters contain a
-    /// file named `PG_VERSION` which containing just the major version
-    /// number/numbers of the cluster's files, e.g. "15" or "9.6".
+    /// file named `PG_VERSION` which containing just the major version number
+    /// of the cluster's files, e.g. "15", or the major.point number for older
+    /// PostgreSQL releases, e.g. "9.6".
     ///
     /// For versions of PostgreSQL before 10, this means that the given
-    /// version's major numbers must match exactly, and the patch number must be
-    /// greater than or equal to this `PartialVersion`'s patch number. When this
-    /// `PartialVersion` has no minor or patch number, the given version is
-    /// assumed to be compatible.
+    /// version's major and point numbers must match exactly, and the minor
+    /// number must be greater than or equal to this `PartialVersion`'s minor
+    /// number. When this `PartialVersion` has no point or minor number, the
+    /// given version is assumed to be compatible.
     ///
     /// For versions of PostgreSQL after and including 10, this means that the
     /// given version's major number must match exactly, and the minor number
@@ -120,7 +127,7 @@ impl PartialVersion {
         }
     }
 
-    /// Remove minor/patch number.
+    /// Remove minor number.
     pub fn widened(&self) -> PartialVersion {
         use PartialVersion::*;
         match self {

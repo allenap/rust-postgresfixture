@@ -16,9 +16,20 @@ use std::{error, fmt, num};
 
 use regex::Regex;
 
+/// Represents a full PostgreSQL version. This is the kind of thing we see when
+/// running `pg_ctl --version` for example.
+///
+/// The "Current minor" column shown on the [PostgreSQL "Versioning Policy"
+/// page][versioning] is what this models.
+///
+/// [versioning]: https://www.postgresql.org/support/versioning/
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Version {
+    /// Pre-PostgreSQL 10, with major, point, and minor version numbers, e.g.
+    /// 9.6.17. It is an error to create this variant with a major number >= 10.
     Pre10(u32, u32, u32),
+    /// PostgreSQL 10+, with major and minor version number, e.g. 10.3. It is an
+    /// error to create this variant with a major number < 10.
     Post10(u32, u32),
 }
 
