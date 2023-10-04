@@ -179,6 +179,7 @@ fn initialise(
             let mut conn = cluster.connect("template1")?;
             conn.execute("ALTER SYSTEM SET fsync = 'off'", &[])?;
             conn.execute("ALTER SYSTEM SET full_page_writes = 'off'", &[])?;
+            conn.execute("ALTER SYSTEM SET synchronous_commit = 'off'", &[])?;
             // TODO: Check `pg_file_settings` for errors before reloading.
             conn.execute("SELECT pg_reload_conf()", &[])?;
             Ok(())
@@ -186,8 +187,9 @@ fn initialise(
     } else if slower {
         |cluster: &cluster::Cluster| {
             let mut conn = cluster.connect("template1")?;
-            conn.execute("ALTER SYSTEM SET fsync = 'on'", &[])?;
-            conn.execute("ALTER SYSTEM SET full_page_writes = 'on'", &[])?;
+            conn.execute("ALTER SYSTEM RESET fsync", &[])?;
+            conn.execute("ALTER SYSTEM RESET full_page_writes", &[])?;
+            conn.execute("ALTER SYSTEM RESET synchronous_commit", &[])?;
             // TODO: Check `pg_file_settings` for errors before reloading.
             conn.execute("SELECT pg_reload_conf()", &[])?;
             Ok(())
