@@ -79,6 +79,15 @@ impl From<postgres::error::Error> for ClusterError {
     }
 }
 
+impl From<runtime::RuntimeError> for ClusterError {
+    fn from(error: runtime::RuntimeError) -> ClusterError {
+        match error {
+            runtime::RuntimeError::IoError(error) => ClusterError::IoError(error),
+            runtime::RuntimeError::UnknownVersion(error) => ClusterError::UnknownVersion(error),
+        }
+    }
+}
+
 /// Representation of a PostgreSQL cluster.
 ///
 /// The cluster may not yet exist on disk. It may exist but be stopped, or it
@@ -116,6 +125,22 @@ impl Cluster {
         self.datadir.is_dir() && self.datadir.join("PG_VERSION").is_file()
     }
 
+    /// Returns the PostgreSQL version in use by a cluster.
+    ///
+    /// This returns the version from the file named `PG_VERSION` in the data
+    /// directory if it exists, otherwise this returns `None`. For PostgreSQL
+    /// versions before 10 this is typically (maybe always) the major and point
+    /// version, e.g. 9.4 rather than 9.4.26. For version 10 and above it
+    /// appears to be just the major number, e.g. 14 rather than 14.2.
+    pub fn version(&self) -> Result<Option<version::partial::PartialVersion>, ClusterError> {
+        let version_file = self.datadir.join("PG_VERSION");
+        match std::fs::read_to_string(version_file) {
+            Ok(version) => Ok(Some(version.parse()?)),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(err) => Err(err)?,
+        }
+    }
+
     /// Check if this cluster is running.
     ///
     /// Tries to distinguish carefully between "definitely running", "definitely
@@ -135,9 +160,9 @@ impl Cluster {
         // later versions, so here we check for specific codes to avoid
         // masking errors from insufficient permissions or missing
         // executables, for example.
-        let running = match (version.major >= 10, version.major) {
+        let running = match version {
             // PostgreSQL 10.x and later.
-            (true, _) => {
+            version::Version::Post10(_major, _minor) => {
                 // PostgreSQL 10
                 // https://www.postgresql.org/docs/10/static/app-pg-ctl.html
                 match code {
@@ -155,12 +180,12 @@ impl Cluster {
                 }
             }
             // PostgreSQL 9.x only.
-            (false, 9) => {
+            version::Version::Pre10(9, point, _minor) => {
                 // PostgreSQL 9.4+
                 // https://www.postgresql.org/docs/9.4/static/app-pg-ctl.html
                 // https://www.postgresql.org/docs/9.5/static/app-pg-ctl.html
                 // https://www.postgresql.org/docs/9.6/static/app-pg-ctl.html
-                if version.minor >= 4 {
+                if point >= 4 {
                     match code {
                         // 3 means that the data directory is present and
                         // accessible but that the server is not running.
@@ -178,7 +203,7 @@ impl Cluster {
                 // PostgreSQL 9.2+
                 // https://www.postgresql.org/docs/9.2/static/app-pg-ctl.html
                 // https://www.postgresql.org/docs/9.3/static/app-pg-ctl.html
-                else if version.minor >= 2 {
+                else if point >= 2 {
                     match code {
                         // 3 means that the data directory is present and
                         // accessible but that the server is not running OR
@@ -203,11 +228,13 @@ impl Cluster {
                 }
             }
             // All other versions.
-            (_, _) => None,
+            version::Version::Pre10(_major, _point, _minor) => None,
         };
 
         match running {
             Some(running) => Ok(running),
+            // TODO: Perhaps include the exit code from `pg_ctl status` in the
+            // error message, and whatever it printed out.
             None => Err(ClusterError::UnsupportedVersion(version)),
         }
     }
@@ -417,6 +444,7 @@ impl Cluster {
 mod tests {
     use super::Cluster;
     use crate::runtime::Runtime;
+    use crate::version::partial::PartialVersion;
     use crate::version::Version;
 
     use std::collections::HashSet;
@@ -452,6 +480,30 @@ mod tests {
             println!("{:?}", runtime);
             let cluster = Cluster::new(&data_dir, runtime);
             assert!(cluster.exists());
+        }
+    }
+
+    #[test]
+    fn cluster_has_no_version_when_it_does_not_exist() {
+        for runtime in Runtime::find_on_path() {
+            println!("{:?}", runtime);
+            let cluster = Cluster::new("some/path", runtime);
+            assert!(matches!(cluster.version(), Ok(None)));
+        }
+    }
+
+    #[test]
+    fn cluster_has_version_when_it_does_exist() {
+        let data_dir = tempdir::TempDir::new("data").unwrap();
+        let version_file = data_dir.path().join("PG_VERSION");
+        File::create(&version_file).unwrap();
+        for runtime in Runtime::find_on_path() {
+            println!("{:?}", runtime);
+            let version: PartialVersion = runtime.version().unwrap().into();
+            let version = version.widened();
+            std::fs::write(&version_file, format!("{version}\n")).unwrap();
+            let cluster = Cluster::new(&data_dir, runtime);
+            assert!(matches!(cluster.version(), Ok(Some(_))));
         }
     }
 
