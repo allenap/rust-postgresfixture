@@ -179,19 +179,6 @@ impl Cluster {
         command
     }
 
-    /// A fairly simplistic check: does the data directory exist and does it
-    /// contain a file named `PG_VERSION`?
-    pub fn exists(&self) -> bool {
-        self.datadir.is_dir() && self.datadir.join("PG_VERSION").is_file()
-    }
-
-    /// Returns the PostgreSQL version in use by this cluster.
-    ///
-    /// See [`version()`] for more details.
-    pub fn version(&self) -> Result<Option<version::PartialVersion>, ClusterError> {
-        version(&self.datadir)
-    }
-
     /// Check if this cluster is running.
     ///
     /// Tries to distinguish carefully between "definitely running", "definitely
@@ -225,7 +212,7 @@ impl Cluster {
                     // not running. If it is present but not accessible
                     // then crash because we can't know if the server is
                     // running or not.
-                    4 if !self.exists() => Some(false),
+                    4 if !exists(self) => Some(false),
                     // For anything else we don't know.
                     _ => None,
                 }
@@ -246,7 +233,7 @@ impl Cluster {
                         // not running. If it is present but not accessible
                         // then crash because we can't know if the server is
                         // running or not.
-                        4 if !self.exists() => Some(false),
+                        4 if !exists(self) => Some(false),
                         // For anything else we don't know.
                         _ => None,
                     }
@@ -307,14 +294,14 @@ impl Cluster {
     /// Create the cluster if it does not already exist.
     pub fn create(&self) -> Result<bool, ClusterError> {
         match self._create() {
-            Err(ClusterError::UnixError(Errno::EAGAIN)) if self.exists() => Ok(false),
+            Err(ClusterError::UnixError(Errno::EAGAIN)) if exists(&self) => Ok(false),
             Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
             other => other,
         }
     }
 
     fn _create(&self) -> Result<bool, ClusterError> {
-        match self.exists() {
+        match exists(&self) {
             // Nothing more to do; the cluster is already in place.
             true => Ok(false),
             // Create the cluster and report back that we did so.
@@ -491,7 +478,24 @@ impl Cluster {
     }
 }
 
-/// Returns the PostgreSQL version in use by a cluster.
+impl AsRef<Path> for Cluster {
+    fn as_ref(&self) -> &Path {
+        &self.datadir
+    }
+}
+
+/// A fairly simplistic but quick check: does the directory exist and does it
+/// look like a PostgreSQL cluster data directory, i.e. does it contain a file
+/// named `PG_VERSION`?
+///
+/// [`version()`] provides a more reliable measure, plus yields the version of
+/// PostgreSQL required to use the cluster.
+pub fn exists<P: AsRef<Path>>(datadir: P) -> bool {
+    let datadir = datadir.as_ref();
+    datadir.is_dir() && datadir.join("PG_VERSION").is_file()
+}
+
+/// Yields the version of PostgreSQL required to use a cluster.
 ///
 /// This returns the version from the file named `PG_VERSION` in the data
 /// directory if it exists, otherwise this returns `None`. For PostgreSQL
@@ -511,7 +515,7 @@ pub fn version<P: AsRef<Path>>(
 
 #[cfg(test)]
 mod tests {
-    use super::Cluster;
+    use super::{exists, version, Cluster};
     use crate::runtime::Runtime;
     use crate::version::{PartialVersion, Version};
 
@@ -535,7 +539,7 @@ mod tests {
         for runtime in Runtime::find_on_path() {
             println!("{:?}", runtime);
             let cluster = Cluster::new("some/path", runtime);
-            assert!(!cluster.exists());
+            assert!(!exists(&cluster));
         }
     }
 
@@ -547,7 +551,7 @@ mod tests {
         for runtime in Runtime::find_on_path() {
             println!("{:?}", runtime);
             let cluster = Cluster::new(&data_dir, runtime);
-            assert!(cluster.exists());
+            assert!(exists(&cluster));
         }
     }
 
@@ -556,7 +560,7 @@ mod tests {
         for runtime in Runtime::find_on_path() {
             println!("{:?}", runtime);
             let cluster = Cluster::new("some/path", runtime);
-            assert!(matches!(cluster.version(), Ok(None)));
+            assert!(matches!(version(&cluster), Ok(None)));
         }
     }
 
@@ -567,11 +571,11 @@ mod tests {
         File::create(&version_file).unwrap();
         for runtime in Runtime::find_on_path() {
             println!("{:?}", runtime);
-            let version: PartialVersion = runtime.version().unwrap().into();
-            let version = version.widened();
-            std::fs::write(&version_file, format!("{version}\n")).unwrap();
+            let pg_version: PartialVersion = runtime.version().unwrap().into();
+            let pg_version = pg_version.widened(); // e.g. 9.6.5 -> 9.6 or 14.3 -> 14.
+            std::fs::write(&version_file, format!("{pg_version}\n")).unwrap();
             let cluster = Cluster::new(&data_dir, runtime);
-            assert!(matches!(cluster.version(), Ok(Some(_))));
+            assert!(matches!(version(&cluster), Ok(Some(_))));
         }
     }
 
@@ -604,9 +608,9 @@ mod tests {
             println!("{:?}", runtime);
             let data_dir = tempdir::TempDir::new("data").unwrap();
             let cluster = Cluster::new(&data_dir, runtime);
-            assert!(!cluster.exists());
+            assert!(!exists(&cluster));
             assert!(cluster.create().unwrap());
-            assert!(cluster.exists());
+            assert!(exists(&cluster));
         }
     }
 
@@ -684,9 +688,9 @@ mod tests {
             println!("{:?}", runtime);
             let data_dir = tempdir::TempDir::new("data").unwrap();
             let cluster = Cluster::new(&data_dir, runtime);
-            assert!(!cluster.exists());
+            assert!(!exists(&cluster));
             assert!(cluster.create().unwrap());
-            assert!(cluster.exists());
+            assert!(exists(&cluster));
             assert!(!cluster.create().unwrap());
         }
     }
@@ -714,9 +718,9 @@ mod tests {
             let cluster = Cluster::new(&data_dir, runtime);
             cluster.create().unwrap();
             cluster.start().unwrap();
-            assert!(cluster.exists());
+            assert!(exists(&cluster));
             cluster.destroy().unwrap();
-            assert!(!cluster.exists());
+            assert!(!exists(&cluster));
         }
     }
 

@@ -12,7 +12,7 @@
 //! let cluster = cluster::Cluster::new(&data_dir, runtime);
 //! let lock_file = cluster_dir.path().join("lock");
 //! let lock = lock::UnlockedFile::try_from(lock_file.as_path()).unwrap();
-//! assert!(coordinate::run_and_stop(&cluster, lock, |cluster| cluster.exists()).unwrap())
+//! assert!(coordinate::run_and_stop(&cluster, lock, cluster::exists).unwrap())
 //! ```
 
 use std::time::Duration;
