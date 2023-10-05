@@ -112,6 +112,17 @@ pub struct Cluster {
 
 impl Cluster {
     /// Represent a cluster at the given path with the given runtime.
+    ///
+    /// If the cluster does not exist, [`create`][`Self::create`] can be used to
+    /// create it with the given runtime, i.e. the new cluster will have a
+    /// `PG_VERSION` of the given runtime.
+    ///
+    /// If the cluster exists, the runtime should ordinarily be selected to
+    /// match the `PG_VERSION` of the cluster. Trying to manage a cluster with
+    /// tools from a different major version will likely not work.
+    ///
+    /// See [`at`][`Self::at`] for a way to create a [`Cluster`] with an
+    /// appropriate runtime.
     pub fn new<P: AsRef<Path>>(datadir: P, runtime: runtime::Runtime) -> Self {
         Self {
             datadir: datadir.as_ref().to_path_buf(),
