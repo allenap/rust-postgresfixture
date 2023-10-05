@@ -20,6 +20,7 @@ pub enum ClusterError {
     UnsupportedVersion(version::Version),
     UnknownVersion(version::VersionError),
     RuntimeNotFound(version::PartialVersion),
+    DataDirectoryNotFound(PathBuf),
     DatabaseError(postgres::error::Error),
     InUse, // Cluster is already in use; cannot lock exclusively.
     Other(Output),
@@ -35,6 +36,7 @@ impl fmt::Display for ClusterError {
             UnsupportedVersion(ref e) => write!(fmt, "PostgreSQL version not supported: {}", e),
             UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {}", e),
             RuntimeNotFound(ref v) => write!(fmt, "PostgreSQL runtime not found for version {v}"),
+            DataDirectoryNotFound(ref p) => write!(fmt, "data directory not found in {p:?}"),
             DatabaseError(ref e) => write!(fmt, "database error: {}", e),
             InUse => write!(fmt, "cluster in use; cannot lock exclusively"),
             Other(ref e) => write!(fmt, "external command failed: {:?}", e),
@@ -51,6 +53,7 @@ impl error::Error for ClusterError {
             ClusterError::UnsupportedVersion(_) => None,
             ClusterError::UnknownVersion(ref error) => Some(error),
             ClusterError::RuntimeNotFound(_) => None,
+            ClusterError::DataDirectoryNotFound(_) => None,
             ClusterError::DatabaseError(ref error) => Some(error),
             ClusterError::InUse => None,
             ClusterError::Other(_) => None,
@@ -116,17 +119,35 @@ impl Cluster {
         }
     }
 
-    /// Represent a cluster at the given path. If there is a cluster there, this
-    /// will try to determine an appropriate runtime to use with it. It will
-    /// prefer to [find a matching runtime on `PATH`][`crate::runtime::Runtime::find_on_path`],
-    /// but will also try to find a runtime using [platform-specific
-    /// logic][`crate::runtime::Runtime::find_on_platform`].
+    /// Represent a cluster at the given path.
+    ///
+    /// This will determine an appropriate runtime to use with the cluster in
+    /// the given data directory. It will prefer to [find a matching runtime on
+    /// `PATH`][`crate::runtime::Runtime::find_on_path`], but will also use
+    /// [platform-specific logic][`crate::runtime::Runtime::find_on_platform`],
+    /// else this returns [`ClusterError::RuntimeNotFound`].
+    ///
+    /// If there is no cluster at the given path, this returns an error:
+    /// [`ClusterError::DataDirectoryNotFound`].
+    ///
+    /// Here's how you might use this:
+    ///
+    /// ```rust
+    /// # use postgresfixture::cluster::{Cluster, ClusterError};
+    /// # use postgresfixture::runtime::Runtime;
+    /// let datadir = "some/path";
+    /// let cluster = match Cluster::at(datadir) {
+    ///     Err(ClusterError::DataDirectoryNotFound(..)) => Cluster::new(datadir, Runtime::default()),
+    ///     Err(err) => panic!("unexpected error: {err}"),
+    ///     Ok(cluster) => cluster,
+    /// };
+    /// ```
     pub fn at<P: AsRef<Path>>(datadir: P) -> Result<Self, ClusterError> {
         use runtime::{determine_best_runtime_for_version, Runtime};
         let datadir = datadir.as_ref();
         let version = version(datadir)?;
         let runtime = match version {
-            None => Default::default(),
+            None => Err(ClusterError::DataDirectoryNotFound(datadir.to_path_buf()))?,
             Some(version) => {
                 let runtimes = Runtime::find_on_path().into_iter();
                 determine_best_runtime_for_version(&version, runtimes)

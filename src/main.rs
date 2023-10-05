@@ -137,7 +137,14 @@ where
         .wrap_err("Could not create UUID-based lock file")
         .with_section(|| lock_uuid.to_string().header("UUID for lock file:"))?;
 
-    let cluster = cluster::Cluster::at(database_dir)?;
+    let cluster = match cluster::Cluster::at(&database_dir) {
+        Err(cluster::ClusterError::DataDirectoryNotFound(..)) => {
+            let runtime = runtime::Runtime::default(); // 🤷
+            Ok(cluster::Cluster::new(&database_dir, runtime))
+        }
+        result => result,
+    }?;
+
     let runner = if destroy {
         coordinate::run_and_destroy
     } else {
