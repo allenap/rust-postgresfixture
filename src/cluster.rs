@@ -288,7 +288,7 @@ impl Cluster {
     ///
     /// The log file does not necessarily exist.
     pub fn logfile(&self) -> PathBuf {
-        self.datadir.join("backend.log")
+        self.datadir.join("postmaster.log")
     }
 
     /// Create the cluster if it does not already exist.
@@ -598,7 +598,10 @@ mod tests {
         for runtime in Runtime::find_on_path() {
             println!("{:?}", runtime);
             let cluster = Cluster::new(&data_dir, runtime);
-            assert_eq!(PathBuf::from("/some/where/backend.log"), cluster.logfile());
+            assert_eq!(
+                PathBuf::from("/some/where/postmaster.log"),
+                cluster.logfile()
+            );
         }
     }
 
