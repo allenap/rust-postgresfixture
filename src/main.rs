@@ -25,7 +25,7 @@ fn main() -> Result<()> {
             cluster.dir,
             &database.name,
             lifecycle.destroy,
-            initialise(cluster.faster, cluster.slower),
+            initialise(cluster.mode),
             |cluster| {
                 check_exit(
                     cluster
@@ -44,7 +44,7 @@ fn main() -> Result<()> {
             cluster.dir,
             &database.name,
             lifecycle.destroy,
-            initialise(cluster.faster, cluster.slower),
+            initialise(cluster.mode),
             |cluster| {
                 check_exit(
                     cluster
@@ -171,30 +171,31 @@ where
 /// Create an initialisation function that will set appropriate PostgreSQL
 /// settings, e.g. `fsync`, `full_page_writes`, etc. that need to be set early.
 fn initialise(
-    faster: bool,
-    slower: bool,
+    mode: Option<cli::Mode>,
 ) -> impl std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::ClusterError> {
-    if faster {
-        |cluster: &cluster::Cluster| {
-            let mut conn = cluster.connect("template1")?;
-            conn.execute("ALTER SYSTEM SET fsync = 'off'", &[])?;
-            conn.execute("ALTER SYSTEM SET full_page_writes = 'off'", &[])?;
-            conn.execute("ALTER SYSTEM SET synchronous_commit = 'off'", &[])?;
-            // TODO: Check `pg_file_settings` for errors before reloading.
-            conn.execute("SELECT pg_reload_conf()", &[])?;
-            Ok(())
+    match mode {
+        Some(cli::Mode::Fast) => {
+            |cluster: &cluster::Cluster| {
+                let mut conn = cluster.connect("template1")?;
+                conn.execute("ALTER SYSTEM SET fsync = 'off'", &[])?;
+                conn.execute("ALTER SYSTEM SET full_page_writes = 'off'", &[])?;
+                conn.execute("ALTER SYSTEM SET synchronous_commit = 'off'", &[])?;
+                // TODO: Check `pg_file_settings` for errors before reloading.
+                conn.execute("SELECT pg_reload_conf()", &[])?;
+                Ok(())
+            }
         }
-    } else if slower {
-        |cluster: &cluster::Cluster| {
-            let mut conn = cluster.connect("template1")?;
-            conn.execute("ALTER SYSTEM RESET fsync", &[])?;
-            conn.execute("ALTER SYSTEM RESET full_page_writes", &[])?;
-            conn.execute("ALTER SYSTEM RESET synchronous_commit", &[])?;
-            // TODO: Check `pg_file_settings` for errors before reloading.
-            conn.execute("SELECT pg_reload_conf()", &[])?;
-            Ok(())
+        Some(cli::Mode::Slow) => {
+            |cluster: &cluster::Cluster| {
+                let mut conn = cluster.connect("template1")?;
+                conn.execute("ALTER SYSTEM RESET fsync", &[])?;
+                conn.execute("ALTER SYSTEM RESET full_page_writes", &[])?;
+                conn.execute("ALTER SYSTEM RESET synchronous_commit", &[])?;
+                // TODO: Check `pg_file_settings` for errors before reloading.
+                conn.execute("SELECT pg_reload_conf()", &[])?;
+                Ok(())
+            }
         }
-    } else {
-        |_: &cluster::Cluster| Ok(())
+        None => |_: &cluster::Cluster| Ok(()),
     }
 }
