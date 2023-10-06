@@ -45,7 +45,7 @@ impl fmt::Display for ClusterError {
 }
 
 impl error::Error for ClusterError {
-    fn cause(&self) -> Option<&dyn error::Error> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             ClusterError::PathEncodingError => None,
             ClusterError::IoError(ref error) => Some(error),

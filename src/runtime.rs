@@ -31,7 +31,7 @@ impl fmt::Display for RuntimeError {
 }
 
 impl error::Error for RuntimeError {
-    fn cause(&self) -> Option<&dyn error::Error> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             RuntimeError::IoError(ref error) => Some(error),
             RuntimeError::UnknownVersion(ref error) => Some(error),
