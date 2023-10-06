@@ -20,6 +20,7 @@ pub enum ClusterError {
     UnsupportedVersion(version::Version),
     UnknownVersion(version::VersionError),
     RuntimeNotFound(version::PartialVersion),
+    RuntimeDefaultNotFound,
     DataDirectoryNotFound(PathBuf),
     DatabaseError(postgres::error::Error),
     InUse, // Cluster is already in use; cannot lock exclusively.
@@ -36,6 +37,7 @@ impl fmt::Display for ClusterError {
             UnsupportedVersion(ref e) => write!(fmt, "PostgreSQL version not supported: {}", e),
             UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {}", e),
             RuntimeNotFound(ref v) => write!(fmt, "PostgreSQL runtime not found for version {v}"),
+            RuntimeDefaultNotFound => write!(fmt, "PostgreSQL runtime not found"),
             DataDirectoryNotFound(ref p) => write!(fmt, "data directory not found in {p:?}"),
             DatabaseError(ref e) => write!(fmt, "database error: {}", e),
             InUse => write!(fmt, "cluster in use; cannot lock exclusively"),
@@ -53,6 +55,7 @@ impl error::Error for ClusterError {
             ClusterError::UnsupportedVersion(_) => None,
             ClusterError::UnknownVersion(ref error) => Some(error),
             ClusterError::RuntimeNotFound(_) => None,
+            ClusterError::RuntimeDefaultNotFound => None,
             ClusterError::DataDirectoryNotFound(_) => None,
             ClusterError::DatabaseError(ref error) => Some(error),
             ClusterError::InUse => None,
@@ -111,65 +114,30 @@ pub struct Cluster {
 }
 
 impl Cluster {
-    /// Represent a cluster at the given path with the given runtime.
-    ///
-    /// If the cluster does not exist, [`create`][`Self::create`] can be used to
-    /// create it with the given runtime, i.e. the new cluster will have a
-    /// `PG_VERSION` of the given runtime.
-    ///
-    /// If the cluster exists, the runtime should ordinarily be selected to
-    /// match the `PG_VERSION` of the cluster. Trying to manage a cluster with
-    /// tools from a different major version will likely not work.
-    ///
-    /// See [`at`][`Self::at`] for a way to create a [`Cluster`] with an
-    /// appropriate runtime.
-    pub fn new<P: AsRef<Path>>(datadir: P, runtime: runtime::Runtime) -> Self {
-        Self {
-            datadir: datadir.as_ref().to_path_buf(),
-            runtime,
-        }
-    }
-
     /// Represent a cluster at the given path.
     ///
-    /// This will determine an appropriate runtime to use with the cluster in
-    /// the given data directory. It will prefer to [find a matching runtime on
-    /// `PATH`][`crate::runtime::Runtime::find_on_path`], but will also use
-    /// [platform-specific logic][`crate::runtime::Runtime::find_on_platform`],
-    /// else this returns [`ClusterError::RuntimeNotFound`].
-    ///
-    /// If there is no cluster at the given path, this returns an error:
-    /// [`ClusterError::DataDirectoryNotFound`].
-    ///
-    /// Here's how you might use this:
-    ///
-    /// ```rust
-    /// # use postgresfixture::cluster::{Cluster, ClusterError};
-    /// # use postgresfixture::runtime::Runtime;
-    /// let datadir = "some/path";
-    /// let cluster = match Cluster::at(datadir) {
-    ///     Err(ClusterError::DataDirectoryNotFound(..)) => Cluster::new(datadir, Runtime::default()),
-    ///     Err(err) => panic!("unexpected error: {err}"),
-    ///     Ok(cluster) => cluster,
-    /// };
-    /// ```
-    pub fn at<P: AsRef<Path>>(datadir: P) -> Result<Self, ClusterError> {
-        use runtime::{determine_best_runtime_for_version, Runtime};
+    /// This will use the given strategy to determine an appropriate runtime to
+    /// use with the cluster in the given data directory, if it exists. If an
+    /// appropriate runtime cannot be found, [`ClusterError::RuntimeNotFound`]
+    /// will be returned.
+    pub fn new<P: AsRef<Path>, S: runtime::strategy::RuntimeStrategy>(
+        datadir: P,
+        strategy: S,
+    ) -> Result<Self, ClusterError> {
         let datadir = datadir.as_ref();
         let version = version(datadir)?;
         let runtime = match version {
-            None => Err(ClusterError::DataDirectoryNotFound(datadir.to_path_buf()))?,
-            Some(version) => {
-                let runtimes = Runtime::find_on_path().into_iter();
-                determine_best_runtime_for_version(&version, runtimes)
-                    .or_else(|| {
-                        let runtimes = Runtime::find_on_platform().into_iter();
-                        determine_best_runtime_for_version(&version, runtimes)
-                    })
-                    .ok_or_else(|| ClusterError::RuntimeNotFound(version))?
-            }
-        };
-        Ok(Self::new(datadir, runtime))
+            None => strategy
+                .fallback()
+                .ok_or_else(|| ClusterError::RuntimeDefaultNotFound),
+            Some(version) => strategy
+                .select(&version)
+                .ok_or_else(|| ClusterError::RuntimeNotFound(version)),
+        }?;
+        Ok(Self {
+            datadir: datadir.to_owned(),
+            runtime,
+        })
     }
 
     fn ctl(&self) -> Command {
@@ -189,7 +157,7 @@ impl Cluster {
             // Killed by signal; return early.
             None => return Err(ClusterError::Other(output)),
             // Success; return early (the server is running).
-            Some(code) if code == 0 => return Ok(true),
+            Some(0) => return Ok(true),
             // More work required to decode what this means.
             Some(code) => code,
         };
@@ -294,14 +262,14 @@ impl Cluster {
     /// Create the cluster if it does not already exist.
     pub fn create(&self) -> Result<bool, ClusterError> {
         match self._create() {
-            Err(ClusterError::UnixError(Errno::EAGAIN)) if exists(&self) => Ok(false),
+            Err(ClusterError::UnixError(Errno::EAGAIN)) if exists(self) => Ok(false),
             Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
             other => other,
         }
     }
 
     fn _create(&self) -> Result<bool, ClusterError> {
-        match exists(&self) {
+        match exists(self) {
             // Nothing more to do; the cluster is already in place.
             true => Ok(false),
             // Create the cluster and report back that we did so.
@@ -515,8 +483,11 @@ pub fn version<P: AsRef<Path>>(
 
 #[cfg(test)]
 mod tests {
-    use super::{exists, version, Cluster};
-    use crate::runtime::Runtime;
+    use super::{exists, version, Cluster, ClusterError};
+    use crate::runtime::{
+        strategy::{RuntimeStrategy, RuntimeStrategySet},
+        Runtime,
+    };
     use crate::version::{PartialVersion, Version};
 
     use std::collections::HashSet;
@@ -524,108 +495,125 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::str::FromStr;
 
-    #[test]
-    fn cluster_new() {
-        for runtime in Runtime::find_on_path() {
-            println!("{:?}", runtime);
-            let cluster = Cluster::new("some/path", runtime);
-            assert_eq!(Path::new("some/path"), cluster.datadir);
-            assert!(!cluster.running().unwrap());
-        }
+    type TestResult = Result<(), ClusterError>;
+
+    fn runtimes() -> Box<dyn Iterator<Item = Runtime>> {
+        let strategy: RuntimeStrategySet = Default::default();
+        let runtimes = strategy.runtimes().collect::<Vec<_>>();
+        Box::new(runtimes.into_iter())
     }
 
     #[test]
-    fn cluster_does_not_exist() {
-        for runtime in Runtime::find_on_path() {
+    fn cluster_new() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let cluster = Cluster::new("some/path", runtime);
+            let cluster = Cluster::new("some/path", runtime)?;
+            assert_eq!(Path::new("some/path"), cluster.datadir);
+            assert!(!cluster.running()?);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cluster_does_not_exist() -> TestResult {
+        for runtime in runtimes() {
+            println!("{:?}", runtime);
+            let cluster = Cluster::new("some/path", runtime)?;
             assert!(!exists(&cluster));
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_does_exist() {
-        let data_dir = tempdir::TempDir::new("data").unwrap();
-        let version_file = data_dir.path().join("PG_VERSION");
-        File::create(&version_file).unwrap();
-        for runtime in Runtime::find_on_path() {
+    fn cluster_does_exist() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let cluster = Cluster::new(&data_dir, runtime);
+            let data_dir = tempdir::TempDir::new("data")?;
+            let cluster = Cluster::new(&data_dir, runtime.clone())?;
+            cluster.create()?;
+            assert!(exists(&cluster));
+            let cluster = Cluster::new(&data_dir, runtime)?;
             assert!(exists(&cluster));
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_has_no_version_when_it_does_not_exist() {
-        for runtime in Runtime::find_on_path() {
+    fn cluster_has_no_version_when_it_does_not_exist() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let cluster = Cluster::new("some/path", runtime);
+            let cluster = Cluster::new("some/path", runtime)?;
             assert!(matches!(version(&cluster), Ok(None)));
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_has_version_when_it_does_exist() {
-        let data_dir = tempdir::TempDir::new("data").unwrap();
+    fn cluster_has_version_when_it_does_exist() -> TestResult {
+        let data_dir = tempdir::TempDir::new("data")?;
         let version_file = data_dir.path().join("PG_VERSION");
-        File::create(&version_file).unwrap();
-        for runtime in Runtime::find_on_path() {
+        File::create(&version_file)?;
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let pg_version: PartialVersion = runtime.version().unwrap().into();
+            let pg_version: PartialVersion = runtime.version()?.into();
             let pg_version = pg_version.widened(); // e.g. 9.6.5 -> 9.6 or 14.3 -> 14.
-            std::fs::write(&version_file, format!("{pg_version}\n")).unwrap();
-            let cluster = Cluster::new(&data_dir, runtime);
+            std::fs::write(&version_file, format!("{pg_version}\n"))?;
+            let cluster = Cluster::new(&data_dir, runtime)?;
             assert!(matches!(version(&cluster), Ok(Some(_))));
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_has_pid_file() {
+    fn cluster_has_pid_file() -> TestResult {
         let data_dir = PathBuf::from("/some/where");
-        for runtime in Runtime::find_on_path() {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let cluster = Cluster::new(&data_dir, runtime);
+            let cluster = Cluster::new(&data_dir, runtime)?;
             assert_eq!(
                 PathBuf::from("/some/where/postmaster.pid"),
                 cluster.pidfile()
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_has_log_file() {
+    fn cluster_has_log_file() -> TestResult {
         let data_dir = PathBuf::from("/some/where");
-        for runtime in Runtime::find_on_path() {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let cluster = Cluster::new(&data_dir, runtime);
+            let cluster = Cluster::new(&data_dir, runtime)?;
             assert_eq!(
                 PathBuf::from("/some/where/postmaster.log"),
                 cluster.logfile()
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_create_creates_cluster() {
-        for runtime in Runtime::find_on_path() {
+    fn cluster_create_creates_cluster() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let data_dir = tempdir::TempDir::new("data").unwrap();
-            let cluster = Cluster::new(&data_dir, runtime);
+            let data_dir = tempdir::TempDir::new("data")?;
+            let cluster = Cluster::new(&data_dir, runtime)?;
             assert!(!exists(&cluster));
-            assert!(cluster.create().unwrap());
+            assert!(cluster.create()?);
             assert!(exists(&cluster));
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_create_creates_cluster_with_neutral_locale_and_timezone() {
-        for runtime in Runtime::find_on_path() {
+    fn cluster_create_creates_cluster_with_neutral_locale_and_timezone() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let data_dir = tempdir::TempDir::new("data").unwrap();
-            let cluster = Cluster::new(&data_dir, runtime.clone());
-            cluster.start().unwrap();
-            let mut conn = cluster.connect("postgres").unwrap();
-            let result = conn.query("SHOW ALL", &[]).unwrap();
+            let data_dir = tempdir::TempDir::new("data")?;
+            let cluster = Cluster::new(&data_dir, runtime.clone())?;
+            cluster.start()?;
+            let mut conn = cluster.connect("postgres")?;
+            let result = conn.query("SHOW ALL", &[])?;
             let params: std::collections::HashMap<String, String> = result
                 .into_iter()
                 .map(|row| (row.get::<usize, String>(0), row.get::<usize, String>(1)))
@@ -639,7 +627,7 @@ mod tests {
             //   but it won't output it.
             //     -- https://www.postgresql.org/docs/9.4/release-9-4-22.html
             //
-            if runtime.version().unwrap() < Version::from_str("9.4.22").unwrap() {
+            if runtime.version()? < Version::from_str("9.4.22")? {
                 let dealias = |tz: &String| (if tz == "UCT" { "UTC" } else { tz }).to_owned();
                 assert_eq!(params.get("TimeZone").map(dealias), Some("UTC".into()));
                 assert_eq!(params.get("log_timezone").map(dealias), Some("UTC".into()));
@@ -654,7 +642,7 @@ mod tests {
             //   them as read-only server variables was unhelpful.
             //     -- https://www.postgresql.org/docs/16/release-16.html
             //
-            if runtime.version().unwrap() >= Version::from_str("16.0").unwrap() {
+            if runtime.version()? >= Version::from_str("16.0")? {
                 assert_eq!(params.get("lc_collate"), None);
                 assert_eq!(params.get("lc_ctype"), None);
                 // 🚨 Also in PostgreSQL 16, lc_messages is now the empty string
@@ -681,95 +669,101 @@ mod tests {
             assert_eq!(params.get("lc_monetary"), Some(&"C".into()));
             assert_eq!(params.get("lc_numeric"), Some(&"C".into()));
             assert_eq!(params.get("lc_time"), Some(&"C".into()));
-            cluster.stop().unwrap();
+            cluster.stop()?;
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_create_does_nothing_when_it_already_exists() {
-        for runtime in Runtime::find_on_path() {
+    fn cluster_create_does_nothing_when_it_already_exists() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let data_dir = tempdir::TempDir::new("data").unwrap();
-            let cluster = Cluster::new(&data_dir, runtime);
+            let data_dir = tempdir::TempDir::new("data")?;
+            let cluster = Cluster::new(&data_dir, runtime)?;
             assert!(!exists(&cluster));
-            assert!(cluster.create().unwrap());
+            assert!(cluster.create()?);
             assert!(exists(&cluster));
-            assert!(!cluster.create().unwrap());
+            assert!(!cluster.create()?);
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_start_stop_starts_and_stops_cluster() {
-        for runtime in Runtime::find_on_path() {
+    fn cluster_start_stop_starts_and_stops_cluster() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let data_dir = tempdir::TempDir::new("data").unwrap();
-            let cluster = Cluster::new(&data_dir, runtime);
-            cluster.create().unwrap();
-            assert!(!cluster.running().unwrap());
-            cluster.start().unwrap();
-            assert!(cluster.running().unwrap());
-            cluster.stop().unwrap();
-            assert!(!cluster.running().unwrap());
+            let data_dir = tempdir::TempDir::new("data")?;
+            let cluster = Cluster::new(&data_dir, runtime)?;
+            cluster.create()?;
+            assert!(!cluster.running()?);
+            cluster.start()?;
+            assert!(cluster.running()?);
+            cluster.stop()?;
+            assert!(!cluster.running()?);
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_destroy_stops_and_removes_cluster() {
-        for runtime in Runtime::find_on_path() {
+    fn cluster_destroy_stops_and_removes_cluster() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let data_dir = tempdir::TempDir::new("data").unwrap();
-            let cluster = Cluster::new(&data_dir, runtime);
-            cluster.create().unwrap();
-            cluster.start().unwrap();
+            let data_dir = tempdir::TempDir::new("data")?;
+            let cluster = Cluster::new(&data_dir, runtime)?;
+            cluster.create()?;
+            cluster.start()?;
             assert!(exists(&cluster));
-            cluster.destroy().unwrap();
+            cluster.destroy()?;
             assert!(!exists(&cluster));
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_connect_connects() {
-        for runtime in Runtime::find_on_path() {
+    fn cluster_connect_connects() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let data_dir = tempdir::TempDir::new("data").unwrap();
-            let cluster = Cluster::new(&data_dir, runtime);
-            cluster.start().unwrap();
-            cluster.connect("template1").unwrap();
-            cluster.destroy().unwrap();
+            let data_dir = tempdir::TempDir::new("data")?;
+            let cluster = Cluster::new(&data_dir, runtime)?;
+            cluster.start()?;
+            cluster.connect("template1")?;
+            cluster.destroy()?;
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_databases_returns_vec_of_database_names() {
-        for runtime in Runtime::find_on_path() {
+    fn cluster_databases_returns_vec_of_database_names() -> TestResult {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let data_dir = tempdir::TempDir::new("data").unwrap();
-            let cluster = Cluster::new(&data_dir, runtime);
-            cluster.start().unwrap();
+            let data_dir = tempdir::TempDir::new("data")?;
+            let cluster = Cluster::new(&data_dir, runtime)?;
+            cluster.start()?;
 
             let expected: HashSet<String> = ["postgres", "template0", "template1"]
                 .iter()
                 .cloned()
                 .map(|s| s.to_string())
                 .collect();
-            let observed: HashSet<String> = cluster.databases().unwrap().iter().cloned().collect();
+            let observed: HashSet<String> = cluster.databases()?.iter().cloned().collect();
             assert_eq!(expected, observed);
 
-            cluster.destroy().unwrap();
+            cluster.destroy()?;
         }
+        Ok(())
     }
 
     #[test]
-    fn cluster_databases_with_non_plain_names_can_be_created_and_dropped() {
+    fn cluster_databases_with_non_plain_names_can_be_created_and_dropped() -> TestResult {
         // PostgreSQL identifiers containing hyphens, for example, or where we
         // want to preserve capitalisation, are possible.
-        for runtime in Runtime::find_on_path() {
+        for runtime in runtimes() {
             println!("{:?}", runtime);
-            let data_dir = tempdir::TempDir::new("data").unwrap();
-            let cluster = Cluster::new(&data_dir, runtime);
-            cluster.start().unwrap();
-            cluster.createdb("foo-bar").unwrap();
-            cluster.createdb("Foo-BAR").unwrap();
+            let data_dir = tempdir::TempDir::new("data")?;
+            let cluster = Cluster::new(&data_dir, runtime)?;
+            cluster.start()?;
+            cluster.createdb("foo-bar")?;
+            cluster.createdb("Foo-BAR")?;
 
             let expected: HashSet<String> =
                 ["foo-bar", "Foo-BAR", "postgres", "template0", "template1"]
@@ -777,12 +771,13 @@ mod tests {
                     .cloned()
                     .map(|s| s.to_string())
                     .collect();
-            let observed: HashSet<String> = cluster.databases().unwrap().iter().cloned().collect();
+            let observed: HashSet<String> = cluster.databases()?.iter().cloned().collect();
             assert_eq!(expected, observed);
 
-            cluster.dropdb("foo-bar").unwrap();
-            cluster.dropdb("Foo-BAR").unwrap();
-            cluster.destroy().unwrap();
+            cluster.dropdb("foo-bar")?;
+            cluster.dropdb("Foo-BAR")?;
+            cluster.destroy()?;
         }
+        Ok(())
     }
 }

@@ -10,7 +10,7 @@ use clap::Parser;
 use color_eyre::eyre::{bail, Result, WrapErr};
 use color_eyre::{Help, SectionExt};
 
-use postgresfixture::{cluster, coordinate, lock, runtime};
+use postgresfixture::{cluster, coordinate, lock, runtime, runtime::strategy::RuntimeStrategy};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -55,9 +55,10 @@ fn main() -> Result<()> {
         ),
         cli::Commands::Runtimes { platform } => {
             let runtimes_found = {
-                let mut runtimes = runtime::Runtime::find_on_path();
+                let mut runtimes: Vec<_> =
+                    runtime::strategy::RuntimesOnPath::Env.runtimes().collect();
                 if platform {
-                    runtimes.extend(runtime::Runtime::find_on_platform())
+                    runtimes.extend(runtime::strategy::RuntimesOnPlatform.runtimes());
                 }
                 runtimes
             };
@@ -137,13 +138,8 @@ where
         .wrap_err("Could not create UUID-based lock file")
         .with_section(|| lock_uuid.to_string().header("UUID for lock file:"))?;
 
-    let cluster = match cluster::Cluster::at(&database_dir) {
-        Err(cluster::ClusterError::DataDirectoryNotFound(..)) => {
-            let runtime = runtime::Runtime::default(); // 🤷
-            Ok(cluster::Cluster::new(&database_dir, runtime))
-        }
-        result => result,
-    }?;
+    let strategy = runtime::strategy::RuntimeStrategySet::default();
+    let cluster = cluster::Cluster::new(&database_dir, strategy)?;
 
     let runner = if destroy {
         coordinate::run_and_destroy
