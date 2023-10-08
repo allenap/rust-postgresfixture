@@ -44,7 +44,7 @@ Usage: postgresfixture <COMMAND>
 Commands:
   shell     Start a psql shell, creating and starting the cluster as necessary
   exec      Execute an arbitrary command, creating and starting the cluster as necessary
-  runtimes  List PostgreSQL runtimes discovered on PATH
+  runtimes  List discovered PostgreSQL runtimes
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -52,13 +52,17 @@ Options:
   -V, --version  Print version
 
 $ postgresfixture runtimes
-   9.4.26     /usr/local/Cellar/postgresql@9.4/9.4.26/bin
-   9.5.25     /usr/local/Cellar/postgresql@9.5/9.5.25/bin
-   10.20      /usr/local/Cellar/postgresql@10/10.20_1/bin
-   11.15      /usr/local/Cellar/postgresql@11/11.15_1/bin
-   12.10      /usr/local/Cellar/postgresql@12/12.10_1/bin
-   13.6       /usr/local/Cellar/postgresql@13/13.6_1/bin
-=> 14.2       /usr/local/bin
+=> 14.9       /opt/homebrew/bin
+
+$ postgresfixture runtimes --platform
+   10.22      /opt/homebrew/Cellar/postgresql@10/10.22_6/bin
+   11.21      /opt/homebrew/Cellar/postgresql@11/11.21/bin
+   12.16      /opt/homebrew/Cellar/postgresql@12/12.16/bin
+   13.12      /opt/homebrew/Cellar/postgresql@13/13.12/bin
+=> 14.9       /opt/homebrew/bin
+   14.9       /opt/homebrew/Cellar/postgresql@14/14.9/bin
+   15.4       /opt/homebrew/Cellar/postgresql@15/15.4/bin
+   16.0       /opt/homebrew/Cellar/postgresql@16/16.0/bin
 
 $ postgresfixture shell
 postgres=# select …
