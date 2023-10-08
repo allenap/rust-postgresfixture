@@ -8,4 +8,4 @@ pub use crate::{
 };
 
 // Traits.
-pub use crate::runtime::strategy::Strategy;
+pub use crate::runtime::Strategy;

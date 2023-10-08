@@ -4,47 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::version;
 
-use super::Runtime;
-
-pub type Runtimes<'a> = Box<dyn Iterator<Item = Runtime> + 'a>;
-
-/// A strategy for finding PostgreSQL runtimes.
-///
-/// There are a few questions we want to answer:
-///
-/// 1. What runtimes are available?
-/// 2. Which of those runtimes is best suited to running a given cluster?
-/// 3. When there are no version constraints, what runtime should we use?
-///
-/// This trait models those questions, and provides default implementations for
-/// #2 and #3.
-///
-/// A good place to start is [`default()`]. It might do what you need.
-pub trait Strategy: std::panic::RefUnwindSafe + 'static {
-    /// Find all runtimes that this strategy knows about.
-    fn runtimes(&self) -> Runtimes;
-
-    /// Determine the most appropriate runtime known to this strategy for the
-    /// given version constraint.
-    ///
-    /// The default implementation narrows the list of runtimes to those that
-    /// match the given version constraint, then chooses the one with the
-    /// highest version number. It might return [`None`].
-    fn select(&self, version: &version::PartialVersion) -> Option<Runtime> {
-        self.runtimes()
-            .filter(|runtime| version.compatible(runtime.version))
-            .max_by(|ra, rb| ra.version.cmp(&rb.version))
-    }
-
-    /// The runtime to use when there are no version constraints, e.g. when
-    /// creating a new cluster.
-    ///
-    /// The default implementation selects the runtime with the highest version
-    /// number.
-    fn fallback(&self) -> Option<Runtime> {
-        self.runtimes().max_by(|ra, rb| ra.version.cmp(&rb.version))
-    }
-}
+use super::{Runtime, Runtimes, Strategy};
 
 /// Find runtimes on a given path, or on `PATH` (from the environment).
 ///

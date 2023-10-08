@@ -79,7 +79,7 @@ versions that are not supported upstream).
 
 ```rust
 use postgresfixture::prelude::*;
-for runtime in runtime::strategy::default().runtimes() {
+for runtime in runtime::strategies::default().runtimes() {
   let data_dir = tempdir::TempDir::new("data")?;
   let cluster = Cluster::new(&data_dir, runtime)?;
   cluster.start()?;
@@ -119,7 +119,7 @@ them.
 
 First you must install multiple versions of PostgreSQL on your machine. Read on
 for platform-specific notes. Once you've installed the versions you want,
-[`postgresfixture::runtime::strategy::default()`] may be able to automatically
+[`postgresfixture::runtime::strategies::default()`] may be able to automatically
 find them – and, since this function is used by tests, those runtimes will
 automatically be tested.
 

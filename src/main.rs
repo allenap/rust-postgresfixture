@@ -11,7 +11,7 @@ use color_eyre::{Help, SectionExt};
 
 use postgresfixture::{
     cluster, coordinate, lock,
-    runtime::{self, strategy::Strategy},
+    runtime::{self, Strategy},
 };
 
 fn main() -> Result<()> {
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
             },
         ),
         cli::Commands::Runtimes => {
-            let strategy = runtime::strategy::default();
+            let strategy = runtime::strategies::default();
             let mut runtimes: Vec<_> = strategy.runtimes().collect();
             let default = strategy.fallback();
 
@@ -117,7 +117,7 @@ where
         .wrap_err("Could not create UUID-based lock file")
         .with_section(|| lock_uuid.to_string().header("UUID for lock file:"))?;
 
-    let strategy = runtime::strategy::default();
+    let strategy = runtime::strategies::default();
     let cluster = cluster::Cluster::new(&database_dir, strategy)?;
 
     let runner = if destroy {

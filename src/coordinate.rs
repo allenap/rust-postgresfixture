@@ -8,7 +8,7 @@
 //! use postgresfixture::prelude::*;
 //! let cluster_dir = tempdir::TempDir::new("cluster")?;
 //! let data_dir = cluster_dir.path().join("data");
-//! let runtime = runtime::strategy::default();
+//! let runtime = runtime::strategies::default();
 //! let cluster = Cluster::new(&data_dir, runtime)?;
 //! let lock_file = cluster_dir.path().join("lock");
 //! let lock = lock::UnlockedFile::try_from(lock_file.as_path())?;

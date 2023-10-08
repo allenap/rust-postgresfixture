@@ -14,7 +14,7 @@
 //!
 //! ```rust
 //! use postgresfixture::prelude::*;
-//! for runtime in runtime::strategy::default().runtimes() {
+//! for runtime in runtime::strategies::default().runtimes() {
 //!   let data_dir = tempdir::TempDir::new("data")?;
 //!   let cluster = Cluster::new(&data_dir, runtime)?;
 //!   cluster.start()?;
