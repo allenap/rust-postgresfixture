@@ -118,13 +118,10 @@ tests will look for all PostgreSQL runtimes on `PATH` and run tests for all of
 them.
 
 First you must install multiple versions of PostgreSQL on your machine. Read on
-for platform-specific notes. Once you've installed the versions you want, the
-[`with-runtimes`](with-runtimes) script may be able to automatically find them
-and add them to `PATH`:
-
-```shellsession
-$ ./with-runtimes cargo test
-```
+for platform-specific notes. Once you've installed the versions you want,
+[`postgresfixture::runtime::strategy::default()`] may be able to automatically
+find them – and, since this function is used by tests, those runtimes will
+automatically be tested.
 
 #### Debian & Ubuntu
 
@@ -151,12 +148,11 @@ $ brew install postgresql@{9.{4,5,6},10,11,12,13}  # Adjust as necessary.
 2. Paste updated `--help` output into [`README.md`](README.md) (this file; see
    near the top). On macOS the command `cargo run -- --help | pbcopy` is
    helpful.
-3. Build **and** test: `cargo build && ./with-runtimes cargo test`. The latter
-   on its own does do a build, but a test build can hide warnings about dead
-   code, so do both.
+3. Build **and** test: `cargo build && cargo test`. The latter on its own does
+   do a build, but a test build can hide warnings about dead code, so do both.
 4. Commit with message "Bump version to `$VERSION`."
 5. Tag with "v`$VERSION`", e.g. `git tag v1.0.10`.
-6. Push: `git push --tags`.
+6. Push: `git push && git push --tags`.
 7. Publish: `cargo publish`.
 
 ## License
