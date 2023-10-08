@@ -52,17 +52,13 @@ Options:
   -V, --version  Print version
 
 $ postgresfixture runtimes
-=> 14.9       /opt/homebrew/bin
-
-$ postgresfixture runtimes --platform
    10.22      /opt/homebrew/Cellar/postgresql@10/10.22_6/bin
    11.21      /opt/homebrew/Cellar/postgresql@11/11.21/bin
    12.16      /opt/homebrew/Cellar/postgresql@12/12.16/bin
    13.12      /opt/homebrew/Cellar/postgresql@13/13.12/bin
-=> 14.9       /opt/homebrew/bin
    14.9       /opt/homebrew/Cellar/postgresql@14/14.9/bin
    15.4       /opt/homebrew/Cellar/postgresql@15/15.4/bin
-   16.0       /opt/homebrew/Cellar/postgresql@16/16.0/bin
+=> 16.0       /opt/homebrew/bin
 
 $ postgresfixture shell
 postgres=# select …
