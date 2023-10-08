@@ -2,7 +2,6 @@ mod cli;
 
 use std::fs;
 use std::io;
-use std::iter;
 use std::path::PathBuf;
 use std::process::{exit, ExitStatus};
 
@@ -56,27 +55,19 @@ fn main() -> Result<()> {
                 )
             },
         ),
-        cli::Commands::Runtimes { platform } => {
-            let runtimes_found = {
-                let mut runtimes: Vec<_> =
-                    runtime::strategy::RuntimesOnPath::Env.runtimes().collect();
-                if platform {
-                    runtimes.extend(runtime::strategy::RuntimesOnPlatform.runtimes());
-                }
-                runtimes
-            };
-
-            // Get version for each runtime. Throw away errors.
-            let mut runtimes: Vec<_> = runtimes_found
-                .into_iter()
-                .zip(iter::once(true).chain(iter::repeat(false)))
-                .collect();
+        cli::Commands::Runtimes => {
+            let strategy = runtime::strategy::default();
+            let mut runtimes: Vec<_> = strategy.runtimes().collect();
+            let default = strategy.fallback();
 
             // Sort by version. Higher versions will sort last.
-            runtimes.sort_by(|(ra, ..), (rb, ..)| ra.version.cmp(&rb.version));
+            runtimes.sort_by(|ra, rb| ra.version.cmp(&rb.version));
 
-            for (runtime, default) in runtimes {
-                let default = if default { "=>" } else { "" };
+            for runtime in runtimes {
+                let default = match default {
+                    Some(ref default) if default == &runtime => "=>",
+                    _ => "",
+                };
                 println!(
                     "{default:2} {version:10} {bindir}",
                     bindir = runtime.bindir.display(),

@@ -18,7 +18,7 @@ use crate::util;
 use crate::version::{self, VersionError};
 pub use error::RuntimeError;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.

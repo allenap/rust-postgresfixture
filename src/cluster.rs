@@ -25,6 +25,7 @@ pub use error::ClusterError;
 /// stop, and destroy the cluster. There's no protection against concurrent
 /// changes to the cluster made by other processes, but the functions in the
 /// [`coordinate`][`crate::coordinate`] module may help.
+#[derive(Clone, Debug)]
 pub struct Cluster {
     /// The data directory of the cluster.
     ///
