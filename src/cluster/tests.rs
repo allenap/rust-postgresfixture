@@ -1,4 +1,4 @@
-use super::{exists, version, Cluster, ClusterError};
+use super::{exists, version, Cluster, ClusterError, State::*};
 use crate::runtime::{self, strategy::Strategy, Runtime};
 use crate::version::{PartialVersion, Version};
 
@@ -110,7 +110,7 @@ fn cluster_create_creates_cluster() -> TestResult {
         let data_dir = tempdir::TempDir::new("data")?;
         let cluster = Cluster::new(&data_dir, runtime)?;
         assert!(!exists(&cluster));
-        assert!(cluster.create()?);
+        assert!(cluster.create()? == Modified);
         assert!(exists(&cluster));
     }
     Ok(())
@@ -192,9 +192,9 @@ fn cluster_create_does_nothing_when_it_already_exists() -> TestResult {
         let data_dir = tempdir::TempDir::new("data")?;
         let cluster = Cluster::new(&data_dir, runtime)?;
         assert!(!exists(&cluster));
-        assert!(cluster.create()?);
+        assert!(cluster.create()? == Modified);
         assert!(exists(&cluster));
-        assert!(!cluster.create()?);
+        assert!(cluster.create()? == Unmodified);
     }
     Ok(())
 }

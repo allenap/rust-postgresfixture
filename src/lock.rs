@@ -50,6 +50,14 @@ impl TryFrom<&std::path::Path> for UnlockedFile {
     }
 }
 
+impl TryFrom<&std::path::PathBuf> for UnlockedFile {
+    type Error = std::io::Error;
+
+    fn try_from(path: &std::path::PathBuf) -> std::io::Result<Self> {
+        Self::try_from(path.as_path())
+    }
+}
+
 impl TryFrom<&Uuid> for UnlockedFile {
     type Error = std::io::Error;
 

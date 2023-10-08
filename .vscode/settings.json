@@ -17,6 +17,7 @@
         "errno",
         "fcntl",
         "initdb",
+        "lockpath",
         "logfile",
         "Nonblock",
         "pbcopy",
