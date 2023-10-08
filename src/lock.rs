@@ -3,12 +3,13 @@
 //! You must start with an [`UnlockedFile`].
 //!
 //! ```rust
-//! let lock_dir = tempdir::TempDir::new("locks").unwrap();
+//! let lock_dir = tempdir::TempDir::new("locks")?;
 //! # use postgresfixture::lock::UnlockedFile;
-//! let mut lock = UnlockedFile::try_from(lock_dir.path().join("foo").as_path()).unwrap();
-//! let lock = lock.lock_shared().unwrap();
-//! let lock = lock.lock_exclusive().unwrap();
-//! let lock = lock.unlock().unwrap();
+//! let mut lock = UnlockedFile::try_from(lock_dir.path().join("foo").as_path())?;
+//! let lock = lock.lock_shared()?;
+//! let lock = lock.lock_exclusive()?;
+//! let lock = lock.unlock()?;
+//! # Ok::<(), std::io::Error>(())
 //! ```
 //!
 //! Dropping a [`LockedFileShared`] or [`LockedFileExclusive`] drops their locks
@@ -183,7 +184,7 @@ mod tests {
 
     #[test]
     fn file_lock_exclusive_takes_exclusive_flock() -> io::Result<()> {
-        let lock_dir = tempdir::TempDir::new("locks").unwrap();
+        let lock_dir = tempdir::TempDir::new("locks")?;
         let lock_filename = lock_dir.path().join("lock");
         let lock = OpenOptions::new()
             .append(true)

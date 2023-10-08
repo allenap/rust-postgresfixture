@@ -52,8 +52,11 @@ impl FromStr for Version {
     type Err = VersionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"(?x) \b (\d+) [.] (\d+) (?: [.] (\d+) )? \b").unwrap();
-        match re.captures(s) {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"(?x) \b (\d+) [.] (\d+) (?: [.] (\d+) )? \b")
+                .expect("invalid regex (for matching PostgreSQL versions)");
+        }
+        match RE.captures(s) {
             Some(caps) => {
                 let a = caps[1].parse::<u32>()?;
                 let b = caps[2].parse::<u32>()?;

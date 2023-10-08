@@ -42,7 +42,8 @@ impl Runtime {
     /// ```rust
     /// # use postgresfixture::runtime::{self, Runtime, strategy::{RuntimeStrategy}};
     /// # let runtime = runtime::strategy::default().fallback().unwrap();
-    /// let version = runtime.execute("pg_ctl").arg("--version").output().unwrap();
+    /// let version = runtime.execute("pg_ctl").arg("--version").output()?;
+    /// # Ok::<(), runtime::RuntimeError>(())
     /// ```
     pub fn execute<T: AsRef<OsStr>>(&self, program: T) -> Command {
         let mut command = Command::new(self.bindir.join(program.as_ref()));
@@ -62,8 +63,9 @@ impl Runtime {
     ///
     /// ```rust
     /// # use postgresfixture::runtime::{self, strategy::RuntimeStrategy};
-    /// let runtime = runtime::strategy::default().fallback().unwrap();
-    /// let version = runtime.command("bash").arg("-c").arg("echo hello").output().unwrap();
+    /// # let runtime = runtime::strategy::default().fallback().unwrap();
+    /// let version = runtime.command("bash").arg("-c").arg("echo hello").output();
+    /// # Ok::<(), runtime::RuntimeError>(())
     /// ```
     pub fn command<T: AsRef<OsStr>>(&self, program: T) -> Command {
         let mut command = Command::new(program);
