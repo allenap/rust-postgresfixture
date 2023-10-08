@@ -79,12 +79,13 @@ fn startup(
     loop {
         lock = match lock.try_lock_exclusive() {
             Ok(Left(lock)) => {
-                // The cluster is locked exclusively. Switch to a shared lock
-                // optimistically.
+                // The cluster is locked exclusively by someone/something else.
+                // Switch to a shared lock optimistically. This blocks until we
+                // get the shared lock.
                 let lock = lock.lock_shared()?;
-                // The cluster may have been stopped while held in that
-                // exclusive lock, so we must check if the cluster is running
-                // _now_, else loop back to the top again.
+                // The cluster may have been started while that exclusive lock
+                // was held, so we must check if the cluster is running now –
+                // otherwise we loop back to the top again.
                 if cluster.running()? {
                     return Ok(lock);
                 }
@@ -120,16 +121,21 @@ where
 {
     match lock.try_lock_exclusive() {
         Ok(Left(lock)) => {
+            // The cluster is in use by someone/something else. There's nothing
+            // more we can do here.
             lock.unlock()?;
             Ok(None)
         }
-        Ok(Right(lock)) => match action(cluster) {
-            Ok(result) => {
-                lock.unlock()?;
-                Ok(Some(result))
+        Ok(Right(lock)) => {
+            // We have an exclusive lock, so we can mutate the cluster.
+            match action(cluster) {
+                Ok(result) => {
+                    lock.unlock()?;
+                    Ok(Some(result))
+                }
+                Err(err) => Err(err),
             }
-            Err(err) => Err(err),
-        },
+        }
         Err(err) => Err(err.into()),
     }
 }
