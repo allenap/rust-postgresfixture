@@ -6,10 +6,11 @@
 //!
 //! ```rust
 //! # use postgresfixture::{cluster, coordinate, lock, runtime};
+//! # use postgresfixture::runtime::strategy::{RuntimeStrategy, RuntimeStrategySet};
 //! let cluster_dir = tempdir::TempDir::new("cluster").unwrap();
 //! let data_dir = cluster_dir.path().join("data");
-//! let runtime = runtime::Runtime::default();
-//! let cluster = cluster::Cluster::new(&data_dir, runtime);
+//! let runtime = RuntimeStrategySet::default().fallback().unwrap();
+//! let cluster = cluster::Cluster::new(&data_dir, runtime).unwrap();
 //! let lock_file = cluster_dir.path().join("lock");
 //! let lock = lock::UnlockedFile::try_from(lock_file.as_path()).unwrap();
 //! assert!(coordinate::run_and_stop(&cluster, lock, cluster::exists).unwrap())

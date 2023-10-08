@@ -16,16 +16,14 @@ pub trait RuntimeStrategy {
     /// version constraint.
     fn select(&self, version: &version::PartialVersion) -> Option<Runtime> {
         self.runtimes()
-            .filter_map(|runtime| runtime.version().map(|rtv| (rtv, runtime)).ok())
-            .filter(|(rtv, _)| version.compatible(*rtv))
-            .max_by(|(v1, _), (v2, _)| v1.cmp(v2))
-            .map(|(_, runtime)| runtime)
+            .filter(|runtime| version.compatible(runtime.version))
+            .max_by(|ra, rb| ra.version.cmp(&rb.version))
     }
 
     /// The runtime to use when there are no version constraints, e.g. when
     /// creating a new cluster.
     fn fallback(&self) -> Option<Runtime> {
-        self.runtimes().next()
+        self.runtimes().max_by(|ra, rb| ra.version.cmp(&rb.version))
     }
 }
 
@@ -64,7 +62,8 @@ impl RuntimeStrategy for RuntimesOnPath {
                 RuntimesOnPath::Env => Self::find_on_env_path(),
             }
             .into_iter()
-            .map(Runtime::new),
+            // Throw away runtimes that we can't determine the version for.
+            .filter_map(|bindir| Runtime::new(bindir).ok()),
         )
     }
 }
@@ -129,7 +128,12 @@ impl RuntimesOnPlatform {
 
 impl RuntimeStrategy for RuntimesOnPlatform {
     fn runtimes(&self) -> Runtimes {
-        Box::new(Self::find().into_iter().map(Runtime::new))
+        Box::new(
+            Self::find()
+                .into_iter()
+                // Throw away runtimes that we can't determine the version for.
+                .filter_map(|bindir| Runtime::new(bindir).ok()),
+        )
     }
 }
 
@@ -170,12 +174,11 @@ impl RuntimeStrategy for Runtime {
     }
 
     fn select(&self, version: &version::PartialVersion) -> Option<Runtime> {
-        if let Ok(rtv) = self.version() {
-            if version.compatible(rtv) {
-                return Some(self.clone());
-            }
+        if version.compatible(self.version) {
+            Some(self.clone())
+        } else {
+            None
         }
-        None
     }
 
     fn fallback(&self) -> Option<Runtime> {

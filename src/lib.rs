@@ -6,9 +6,10 @@
 //!
 //! ```rust
 //! # use postgresfixture::{cluster, runtime};
-//! for runtime in runtime::Runtime::find_on_path() {
+//! # use postgresfixture::runtime::{strategy::{RuntimeStrategy, RuntimeStrategySet}};
+//! for runtime in runtime::strategy::RuntimeStrategySet::default().runtimes() {
 //!   let data_dir = tempdir::TempDir::new("data")?;
-//!   let cluster = cluster::Cluster::new(&data_dir, runtime);
+//!   let cluster = cluster::Cluster::new(&data_dir, runtime)?;
 //!   cluster.start()?;
 //!   assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
 //!   let mut conn = cluster.connect("template1")?;

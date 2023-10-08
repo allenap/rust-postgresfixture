@@ -12,7 +12,7 @@ use std::process::Command;
 use std::{env, error, fmt, io};
 
 use crate::util;
-use crate::version;
+use crate::version::{self, VersionError};
 
 pub mod strategy;
 
@@ -53,60 +53,40 @@ impl From<version::VersionError> for RuntimeError {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.
-    ///
-    /// Can be omitted (i.e. [`None`]) to search `PATH` only.
-    pub bindir: Option<PathBuf>,
+    pub bindir: PathBuf,
+
+    /// Version of this runtime.
+    pub version: version::Version,
 }
 
 impl Runtime {
-    pub fn new<P: AsRef<Path>>(bindir: P) -> Self {
-        Self {
-            bindir: Some(bindir.as_ref().to_path_buf()),
-        }
-    }
-
-    /// Get the version of PostgreSQL from `pg_ctl`.
-    ///
-    /// <https://www.postgresql.org/support/versioning/> shows that version
-    /// numbers are **not** SemVer compatible. The [`version`][`crate::version`]
-    /// module in this crate can parse the version string returned by this
-    /// function.
-    pub fn version(&self) -> Result<version::Version, RuntimeError> {
-        // Execute pg_ctl and extract version.
-        let version_output = self.execute("pg_ctl").arg("--version").output()?;
-        let version_string = String::from_utf8_lossy(&version_output.stdout);
-        // The version parser can deal with leading garbage, i.e. it can parse
-        // "pg_ctl (PostgreSQL) 12.2" and get 12.2 out of it.
-        Ok(version_string.parse()?)
+    pub fn new<P: AsRef<Path>>(bindir: P) -> Result<Self, RuntimeError> {
+        Ok(Self {
+            bindir: bindir.as_ref().to_owned(),
+            version: version(bindir)?,
+        })
     }
 
     /// Return a [`Command`] prepped to run the given `program` in this
     /// PostgreSQL runtime.
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::Runtime;
-    /// let version = Runtime::default().execute("pg_ctl").arg("--version").output().unwrap();
+    /// # use postgresfixture::runtime::{Runtime, strategy::{RuntimeStrategy, RuntimeStrategySet}};
+    /// # let runtime = RuntimeStrategySet::default().fallback().unwrap();
+    /// let version = runtime.execute("pg_ctl").arg("--version").output().unwrap();
     /// ```
     pub fn execute<T: AsRef<OsStr>>(&self, program: T) -> Command {
-        let mut command;
-        match self.bindir {
-            Some(ref bindir) => {
-                command = Command::new(bindir.join(program.as_ref()));
-                // For now, panic if we can't manipulate PATH.
-                // TODO: Print warning if this fails.
-                command.env(
-                    "PATH",
-                    util::prepend_to_path(bindir, env::var_os("PATH")).unwrap(),
-                );
-            }
-            None => {
-                command = Command::new(program);
-            }
-        }
+        let mut command = Command::new(self.bindir.join(program.as_ref()));
+        // For now, panic if we can't manipulate PATH.
+        // TODO: Print warning if this fails.
+        command.env(
+            "PATH",
+            util::prepend_to_path(&self.bindir, env::var_os("PATH")).unwrap(),
+        );
         command
     }
 
@@ -116,35 +96,50 @@ impl Runtime {
     /// [`Self::bindir`].
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::Runtime;
-    /// let version = Runtime::default().command("bash").arg("-c").arg("echo hello").output().unwrap();
+    /// # use postgresfixture::runtime::strategy::{RuntimeStrategy, RuntimeStrategySet};
+    /// let runtime = RuntimeStrategySet::default().fallback().unwrap();
+    /// let version = runtime.command("bash").arg("-c").arg("echo hello").output().unwrap();
     /// ```
     pub fn command<T: AsRef<OsStr>>(&self, program: T) -> Command {
-        let mut command;
-        match self.bindir {
-            Some(ref bindir) => {
-                command = Command::new(program);
-                // For now, panic if we can't manipulate PATH.
-                // TODO: Print warning if this fails.
-                command.env(
-                    "PATH",
-                    util::prepend_to_path(bindir, env::var_os("PATH")).unwrap(),
-                );
-            }
-            None => {
-                command = Command::new(program);
-            }
-        }
+        let mut command = Command::new(program);
+        // For now, panic if we can't manipulate PATH.
+        // TODO: Print warning if this fails.
+        command.env(
+            "PATH",
+            util::prepend_to_path(&self.bindir, env::var_os("PATH")).unwrap(),
+        );
         command
+    }
+}
+
+/// Get the version of PostgreSQL from `pg_ctl`.
+///
+/// <https://www.postgresql.org/support/versioning/> shows that version
+/// numbers are **not** SemVer compatible. The [`version`][`crate::version`]
+/// module in this crate can parse the version string returned by this
+/// function.
+pub fn version<P: AsRef<Path>>(bindir: P) -> Result<version::Version, RuntimeError> {
+    // Execute pg_ctl and extract version.
+    let command = bindir.as_ref().join("pg_ctl");
+    let output = Command::new(command).arg("--version").output()?;
+    if output.status.success() {
+        let version_string = String::from_utf8_lossy(&output.stdout);
+        // The version parser can deal with leading garbage, i.e. it can parse
+        // "pg_ctl (PostgreSQL) 12.2" and get 12.2 out of it.
+        Ok(version_string.parse()?)
+    } else {
+        Err(RuntimeError::UnknownVersion(VersionError::Missing))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Runtime;
+    use super::{Runtime, RuntimeError};
 
     use std::env;
     use std::path::PathBuf;
+
+    type TestResult = Result<(), RuntimeError>;
 
     fn find_bindir() -> PathBuf {
         env::split_paths(&env::var_os("PATH").expect("PATH not set"))
@@ -153,17 +148,10 @@ mod tests {
     }
 
     #[test]
-    fn runtime_new() {
+    fn runtime_new() -> TestResult {
         let bindir = find_bindir();
-        let pg = Runtime::new(&bindir);
-        assert_eq!(Some(bindir), pg.bindir);
-    }
-
-    #[test]
-    fn runtime_default() {
-        let pg = Runtime::default();
-        assert_eq!(None, pg.bindir);
-        let pg: Runtime = Default::default(); // Via trait.
-        assert_eq!(None, pg.bindir);
+        let pg = Runtime::new(&bindir)?;
+        assert_eq!(bindir, pg.bindir);
+        Ok(())
     }
 }

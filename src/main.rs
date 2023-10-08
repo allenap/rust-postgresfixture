@@ -67,23 +67,18 @@ fn main() -> Result<()> {
             let mut runtimes: Vec<_> = runtimes_found
                 .into_iter()
                 .zip(iter::once(true).chain(iter::repeat(false)))
-                .filter_map(|(runtime, default)| match runtime.version() {
-                    Ok(version) => Some((version, runtime, default)),
-                    Err(_) => None,
-                })
                 .collect();
 
             // Sort by version. Higher versions will sort last.
-            runtimes.sort_by(|(v1, ..), (v2, ..)| v1.cmp(v2));
+            runtimes.sort_by(|(ra, ..), (rb, ..)| ra.version.cmp(&rb.version));
 
-            for (version, runtime, default) in runtimes {
+            for (runtime, default) in runtimes {
                 let default = if default { "=>" } else { "" };
-                match runtime.bindir {
-                    Some(ref path) => {
-                        println!("{default:2} {version:10} {path}", path = path.display())
-                    }
-                    None => println!("{default:2} {version:10?} <???>",),
-                }
+                println!(
+                    "{default:2} {version:10} {bindir}",
+                    bindir = runtime.bindir.display(),
+                    version = runtime.version,
+                )
             }
 
             Ok(0)
