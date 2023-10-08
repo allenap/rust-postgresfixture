@@ -6,6 +6,7 @@
 //! can traverse your `PATH` to discover all the versions currently available to
 //! you.
 
+mod cache;
 mod error;
 pub mod strategy;
 
@@ -15,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::util;
-use crate::version::{self, VersionError};
+use crate::version;
 pub use error::RuntimeError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,10 +31,8 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn new<P: AsRef<Path>>(bindir: P) -> Result<Self, RuntimeError> {
-        Ok(Self {
-            bindir: bindir.as_ref().to_owned(),
-            version: version(bindir)?,
-        })
+        let version = cache::version(bindir.as_ref().join("pg_ctl"))?;
+        Ok(Self { bindir: bindir.as_ref().to_owned(), version })
     }
 
     /// Return a [`Command`] prepped to run the given `program` in this
@@ -82,28 +81,6 @@ impl Runtime {
             util::prepend_to_path(&self.bindir, env::var_os("PATH")).unwrap(),
         );
         command
-    }
-}
-
-/// Get the version of PostgreSQL from `pg_ctl`.
-///
-/// The [PostgreSQL "Versioning Policy"][versioning] shows that version numbers
-/// are **not** SemVer compatible. The [`version`][`mod@crate::version`] module
-/// in this crate is used to parse the version string from `pg_ctl` and it does
-/// understand the nuances of PostgreSQL's versioning scheme.
-///
-/// [versioning]: https://www.postgresql.org/support/versioning/
-pub fn version<P: AsRef<Path>>(bindir: P) -> Result<version::Version, RuntimeError> {
-    // Execute pg_ctl and extract version.
-    let command = bindir.as_ref().join("pg_ctl");
-    let output = Command::new(command).arg("--version").output()?;
-    if output.status.success() {
-        let version_string = String::from_utf8_lossy(&output.stdout);
-        // The version parser can deal with leading garbage, i.e. it can parse
-        // "pg_ctl (PostgreSQL) 12.2" and get 12.2 out of it.
-        Ok(version_string.parse()?)
-    } else {
-        Err(RuntimeError::UnknownVersion(VersionError::Missing))
     }
 }
 

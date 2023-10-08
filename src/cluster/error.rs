@@ -85,7 +85,7 @@ impl From<runtime::RuntimeError> for ClusterError {
     fn from(error: runtime::RuntimeError) -> ClusterError {
         match error {
             runtime::RuntimeError::IoError(error) => ClusterError::IoError(error),
-            runtime::RuntimeError::UnknownVersion(error) => ClusterError::UnknownVersion(error),
+            runtime::RuntimeError::VersionError(error) => ClusterError::UnknownVersion(error),
         }
     }
 }
