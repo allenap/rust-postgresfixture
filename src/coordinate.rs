@@ -9,7 +9,7 @@
 //! let cluster_dir = tempdir::TempDir::new("cluster")?;
 //! let data_dir = cluster_dir.path().join("data");
 //! let runtime = strategy::default();
-//! let cluster = Cluster::new(&data_dir, &runtime)?;
+//! let cluster = Cluster::new(&data_dir, runtime)?;
 //! let lock_file = cluster_dir.path().join("lock");
 //! let lock = lock::UnlockedFile::try_from(lock_file.as_path())?;
 //! assert!(coordinate::run_and_stop(&cluster, lock, cluster::exists)?);

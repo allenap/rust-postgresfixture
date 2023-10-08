@@ -25,48 +25,46 @@ pub use error::ClusterError;
 /// stop, and destroy the cluster. There's no protection against concurrent
 /// changes to the cluster made by other processes, but the functions in the
 /// [`coordinate`][`crate::coordinate`] module may help.
-#[derive(Clone, Debug)]
 pub struct Cluster {
     /// The data directory of the cluster.
     ///
     /// Corresponds to the `PGDATA` environment variable.
     datadir: PathBuf,
-    /// The installation of PostgreSQL to use with this cluster.
-    runtime: runtime::Runtime,
+    /// How to select the PostgreSQL installation to use with this cluster.
+    strategy: Box<dyn runtime::strategy::RuntimeStrategy>,
 }
 
 impl Cluster {
     /// Represent a cluster at the given path.
-    ///
-    /// This will use the given strategy to determine an appropriate runtime to
-    /// use with the cluster in the given data directory, if it exists. If an
-    /// appropriate runtime cannot be found, [`ClusterError::RuntimeNotFound`]
-    /// will be returned.
     pub fn new<P: AsRef<Path>, S: runtime::strategy::RuntimeStrategy>(
         datadir: P,
-        strategy: &S,
+        strategy: S,
     ) -> Result<Self, ClusterError> {
-        let datadir = datadir.as_ref();
-        let version = version(datadir)?;
-        let runtime = match version {
-            None => strategy
-                .fallback()
-                .ok_or_else(|| ClusterError::RuntimeDefaultNotFound),
-            Some(version) => strategy
-                .select(&version)
-                .ok_or_else(|| ClusterError::RuntimeNotFound(version)),
-        }?;
         Ok(Self {
-            datadir: datadir.to_owned(),
-            runtime,
+            datadir: datadir.as_ref().to_owned(),
+            strategy: Box::new(strategy),
         })
     }
 
-    fn ctl(&self) -> Command {
-        let mut command = self.runtime.execute("pg_ctl");
+    /// Determine the runtime to use with this cluster.
+    fn runtime(&self) -> Result<runtime::Runtime, ClusterError> {
+        match version(self)? {
+            None => self
+                .strategy
+                .fallback()
+                .ok_or_else(|| ClusterError::RuntimeDefaultNotFound),
+            Some(version) => self
+                .strategy
+                .select(&version)
+                .ok_or_else(|| ClusterError::RuntimeNotFound(version)),
+        }
+    }
+
+    fn ctl(&self) -> Result<Command, ClusterError> {
+        let mut command = self.runtime()?.execute("pg_ctl");
         command.env("PGDATA", &self.datadir);
         command.env("PGHOST", &self.datadir);
-        command
+        Ok(command)
     }
 
     /// Check if this cluster is running.
@@ -74,7 +72,7 @@ impl Cluster {
     /// Tries to distinguish carefully between "definitely running", "definitely
     /// not running", and "don't know". The latter results in `ClusterError`.
     pub fn running(&self) -> Result<bool, ClusterError> {
-        let output = self.ctl().arg("status").output()?;
+        let output = self.ctl()?.arg("status").output()?;
         let code = match output.status.code() {
             // Killed by signal; return early.
             None => return Err(ClusterError::Other(output)),
@@ -83,11 +81,12 @@ impl Cluster {
             // More work required to decode what this means.
             Some(code) => code,
         };
+        let runtime = self.runtime()?;
         // PostgreSQL has evolved to return different error codes in
         // later versions, so here we check for specific codes to avoid
         // masking errors from insufficient permissions or missing
         // executables, for example.
-        let running = match self.runtime.version {
+        let running = match runtime.version {
             // PostgreSQL 10.x and later.
             version::Version::Post10(_major, _minor) => {
                 // PostgreSQL 10
@@ -162,7 +161,7 @@ impl Cluster {
             Some(running) => Ok(running),
             // TODO: Perhaps include the exit code from `pg_ctl status` in the
             // error message, and whatever it printed out.
-            None => Err(ClusterError::UnsupportedVersion(self.runtime.version)),
+            None => Err(ClusterError::UnsupportedVersion(runtime.version)),
         }
     }
 
@@ -197,7 +196,7 @@ impl Cluster {
             // Create the cluster and report back that we did so.
             fs::create_dir_all(&self.datadir)?;
             #[allow(clippy::suspicious_command_arg_space)]
-            self.ctl()
+            self.ctl()?
                 .arg("init")
                 .arg("-s")
                 .arg("-o")
@@ -236,7 +235,7 @@ impl Cluster {
         // postgres options:
         //  -h <arg> -- host name; empty arg means Unix socket only.
         //  -k -- socket directory.
-        self.ctl()
+        self.ctl()?
             .arg("start")
             .arg("-l")
             .arg(self.logfile())
@@ -266,7 +265,7 @@ impl Cluster {
     }
 
     pub fn shell(&self, database: &str) -> Result<ExitStatus, ClusterError> {
-        let mut command = self.runtime.execute("psql");
+        let mut command = self.runtime()?.execute("psql");
         command.arg("--quiet");
         command.env("PGDATA", &self.datadir);
         command.env("PGHOST", &self.datadir);
@@ -280,7 +279,7 @@ impl Cluster {
         command: T,
         args: &[T],
     ) -> Result<ExitStatus, ClusterError> {
-        let mut command = self.runtime.command(command);
+        let mut command = self.runtime()?.command(command);
         command.args(args);
         command.env("PGDATA", &self.datadir);
         command.env("PGHOST", &self.datadir);
@@ -338,7 +337,7 @@ impl Cluster {
         // pg_ctl options:
         //  -w -- wait for shutdown to complete.
         //  -m <mode> -- shutdown mode.
-        self.ctl()
+        self.ctl()?
             .arg("stop")
             .arg("-s")
             .arg("-w")
