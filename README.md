@@ -79,7 +79,7 @@ versions that are not supported upstream).
 
 ```rust
 use postgresfixture::prelude::*;
-for runtime in strategy::default().runtimes() {
+for runtime in runtime::strategy::default().runtimes() {
   let data_dir = tempdir::TempDir::new("data")?;
   let cluster = Cluster::new(&data_dir, runtime)?;
   cluster.start()?;
@@ -90,7 +90,7 @@ for runtime in strategy::default().runtimes() {
   assert_eq!(collations, vec![1234]);
   cluster.stop()?;
 }
-# Ok::<(), cluster::Error>(())
+# Ok::<(), ClusterError>(())
 ```
 
 You may want to use this with the functions in the `coordinate` module like

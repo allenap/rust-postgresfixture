@@ -2,28 +2,28 @@ use std::{error, fmt, num};
 
 /// Error parsing a PostgreSQL version number.
 #[derive(Debug, PartialEq)]
-pub enum Error {
+pub enum VersionError {
     BadlyFormed,
     Missing,
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for VersionError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::BadlyFormed => write!(fmt, "badly formed"),
-            Error::Missing => write!(fmt, "not found"),
+            VersionError::BadlyFormed => write!(fmt, "badly formed"),
+            VersionError::Missing => write!(fmt, "not found"),
         }
     }
 }
 
-impl error::Error for Error {
+impl error::Error for VersionError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         None
     }
 }
 
-impl From<num::ParseIntError> for Error {
-    fn from(_error: num::ParseIntError) -> Error {
-        Error::BadlyFormed
+impl From<num::ParseIntError> for VersionError {
+    fn from(_error: num::ParseIntError) -> VersionError {
+        VersionError::BadlyFormed
     }
 }

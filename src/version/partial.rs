@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use regex::Regex;
 
-use super::{Error, Version};
+use super::{Version, VersionError};
 
 /// Represents a PostgreSQL version with some parts missing. This is the kind of
 /// thing we might find in a cluster's `PG_VERSION` file.
@@ -14,7 +14,6 @@ use super::{Error, Version};
 /// represent the "Current minor" column too.
 ///
 /// [versioning]: https://www.postgresql.org/support/versioning/
-#[allow(clippy::module_name_repetitions)]
 #[derive(Copy, Clone, Debug)]
 pub enum PartialVersion {
     /// Pre-PostgreSQL 10, with major and point version numbers, e.g. 9.6. It is
@@ -86,12 +85,12 @@ impl PartialVersion {
     /// [`PartialVersion::Pre10mm`] have a major version number less than 10,
     /// and that [`PartialVersion::Post10m`] and [`PartialVersion::Post10mm`]
     /// have a major version number greater than or equal to 10.
-    pub fn checked(self) -> Result<Self, Error> {
+    pub fn checked(self) -> Result<Self, VersionError> {
         use PartialVersion::*;
         match self {
             Pre10m(a, ..) | Pre10mm(a, ..) if a < 10 => Ok(self),
             Post10m(a) | Post10mm(a, ..) if a >= 10 => Ok(self),
-            _ => Err(Error::BadlyFormed),
+            _ => Err(VersionError::BadlyFormed),
         }
     }
 
@@ -202,7 +201,7 @@ impl fmt::Display for PartialVersion {
 }
 
 impl FromStr for PartialVersion {
-    type Err = Error;
+    type Err = VersionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         lazy_static! {
@@ -220,16 +219,16 @@ impl FromStr for PartialVersion {
                 (Some(a), Some(b), Some(c)) if a < 10 => Ok(Self::Pre10mm(a, b, c)),
                 (Some(a), None, None) if a >= 10 => Ok(Self::Post10m(a)),
                 (Some(a), Some(b), None) if a >= 10 => Ok(Self::Post10mm(a, b)),
-                _ => Err(Error::BadlyFormed),
+                _ => Err(VersionError::BadlyFormed),
             },
-            None => Err(Error::Missing),
+            None => Err(VersionError::Missing),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{Error::*, Version};
+    use super::super::{Version, VersionError::*};
     use super::{PartialVersion, PartialVersion::*};
 
     use rand::seq::SliceRandom;

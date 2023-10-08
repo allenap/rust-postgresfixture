@@ -17,7 +17,7 @@ use std::process::Command;
 
 use crate::util;
 use crate::version;
-pub use error::Error;
+pub use error::RuntimeError;
 pub use strategy::Strategy;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,7 +31,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn new<P: AsRef<Path>>(bindir: P) -> Result<Self, Error> {
+    pub fn new<P: AsRef<Path>>(bindir: P) -> Result<Self, RuntimeError> {
         let version = cache::version(bindir.as_ref().join("pg_ctl"))?;
         Ok(Self { bindir: bindir.as_ref().to_owned(), version })
     }
@@ -40,10 +40,10 @@ impl Runtime {
     /// PostgreSQL runtime.
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::{self, Runtime, Strategy};
+    /// # use postgresfixture::runtime::{self, RuntimeError, Strategy};
     /// # let runtime = runtime::strategy::default().fallback().unwrap();
     /// let version = runtime.execute("pg_ctl").arg("--version").output()?;
-    /// # Ok::<(), runtime::Error>(())
+    /// # Ok::<(), RuntimeError>(())
     /// ```
     ///
     /// # Panics
@@ -65,10 +65,10 @@ impl Runtime {
     /// [`Self::bindir`].
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::{self, Strategy};
+    /// # use postgresfixture::runtime::{self, RuntimeError, Strategy};
     /// # let runtime = runtime::strategy::default().fallback().unwrap();
     /// let version = runtime.command("bash").arg("-c").arg("echo hello").output();
-    /// # Ok::<(), runtime::Error>(())
+    /// # Ok::<(), RuntimeError>(())
     /// ```
     ///
     /// # Panics
@@ -87,12 +87,12 @@ impl Runtime {
 
 #[cfg(test)]
 mod tests {
-    use super::{Error, Runtime};
+    use super::{Runtime, RuntimeError};
 
     use std::env;
     use std::path::PathBuf;
 
-    type TestResult = Result<(), Error>;
+    type TestResult = Result<(), RuntimeError>;
 
     fn find_bindir() -> PathBuf {
         env::split_paths(&env::var_os("PATH").expect("PATH not set"))

@@ -92,7 +92,7 @@ fn run<INIT, ACTION>(
     action: ACTION,
 ) -> Result<i32>
 where
-    INIT: std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::Error>,
+    INIT: std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::ClusterError>,
     ACTION: FnOnce(&cluster::Cluster) -> Result<i32> + std::panic::UnwindSafe,
 {
     // Create the cluster directory first.
@@ -154,7 +154,7 @@ where
 /// settings, e.g. `fsync`, `full_page_writes`, etc. that need to be set early.
 fn initialise(
     mode: Option<cli::Mode>,
-) -> impl std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::Error> {
+) -> impl std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::ClusterError> {
     match mode {
         Some(cli::Mode::Fast) => {
             |cluster: &cluster::Cluster| {

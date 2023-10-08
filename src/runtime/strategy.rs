@@ -165,7 +165,6 @@ impl Strategy for RuntimesOnPlatform {
 }
 
 /// Combine multiple runtime strategies, in order of preference.
-#[allow(clippy::module_name_repetitions)]
 pub struct StrategySet(Vec<Box<dyn Strategy>>);
 
 impl Strategy for StrategySet {

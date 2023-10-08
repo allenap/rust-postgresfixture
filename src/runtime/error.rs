@@ -3,14 +3,14 @@ use std::{error, fmt, io};
 use crate::version;
 
 #[derive(Debug)]
-pub enum Error {
+pub enum RuntimeError {
     IoError(io::Error),
-    VersionError(version::Error),
+    VersionError(version::VersionError),
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for RuntimeError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        use Error::*;
+        use RuntimeError::*;
         match *self {
             IoError(ref e) => write!(fmt, "input/output error: {e}"),
             VersionError(ref e) => e.fmt(fmt),
@@ -18,23 +18,23 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error for Error {
+impl error::Error for RuntimeError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
-            Error::IoError(ref error) => Some(error),
-            Error::VersionError(ref error) => Some(error),
+            RuntimeError::IoError(ref error) => Some(error),
+            RuntimeError::VersionError(ref error) => Some(error),
         }
     }
 }
 
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Error {
-        Error::IoError(error)
+impl From<io::Error> for RuntimeError {
+    fn from(error: io::Error) -> RuntimeError {
+        RuntimeError::IoError(error)
     }
 }
 
-impl From<version::Error> for Error {
-    fn from(error: version::Error) -> Error {
-        Error::VersionError(error)
+impl From<version::VersionError> for RuntimeError {
+    fn from(error: version::VersionError) -> RuntimeError {
+        RuntimeError::VersionError(error)
     }
 }

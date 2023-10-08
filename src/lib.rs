@@ -3,6 +3,7 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::match_same_arms)]
 #![allow(clippy::missing_errors_doc)]
+#![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
 //!
@@ -13,7 +14,7 @@
 //!
 //! ```rust
 //! use postgresfixture::prelude::*;
-//! for runtime in strategy::default().runtimes() {
+//! for runtime in runtime::strategy::default().runtimes() {
 //!   let data_dir = tempdir::TempDir::new("data")?;
 //!   let cluster = Cluster::new(&data_dir, runtime)?;
 //!   cluster.start()?;
@@ -24,7 +25,7 @@
 //!   assert_eq!(collations, vec![1234]);
 //!   cluster.stop()?;
 //! }
-//! # Ok::<(), cluster::Error>(())
+//! # Ok::<(), ClusterError>(())
 //! ```
 //!
 //! You may want to use this with the functions in the [`coordinate`] module

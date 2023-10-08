@@ -1,4 +1,4 @@
-use super::{exists, version, Cluster, Error};
+use super::{exists, version, Cluster, ClusterError};
 use crate::runtime::{self, strategy::Strategy, Runtime};
 use crate::version::{PartialVersion, Version};
 
@@ -7,7 +7,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-type TestResult = Result<(), Error>;
+type TestResult = Result<(), ClusterError>;
 
 fn runtimes() -> Box<dyn Iterator<Item = Runtime>> {
     let runtimes = runtime::strategy::default().runtimes().collect::<Vec<_>>();

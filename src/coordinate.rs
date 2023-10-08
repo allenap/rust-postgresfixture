@@ -8,12 +8,12 @@
 //! use postgresfixture::prelude::*;
 //! let cluster_dir = tempdir::TempDir::new("cluster")?;
 //! let data_dir = cluster_dir.path().join("data");
-//! let runtime = strategy::default();
+//! let runtime = runtime::strategy::default();
 //! let cluster = Cluster::new(&data_dir, runtime)?;
 //! let lock_file = cluster_dir.path().join("lock");
 //! let lock = lock::UnlockedFile::try_from(lock_file.as_path())?;
 //! assert!(coordinate::run_and_stop(&cluster, lock, cluster::exists)?);
-//! # Ok::<(), cluster::Error>(())
+//! # Ok::<(), ClusterError>(())
 //! ```
 
 use std::time::Duration;
@@ -21,7 +21,7 @@ use std::time::Duration;
 use either::Either::{Left, Right};
 use rand::RngCore;
 
-use crate::cluster::{self, Cluster};
+use crate::cluster::{Cluster, ClusterError};
 use crate::lock;
 
 /// Perform `action` in `cluster`.
@@ -35,7 +35,7 @@ pub fn run_and_stop<'a, F, T>(
     cluster: &'a Cluster,
     lock: lock::UnlockedFile,
     action: F,
-) -> Result<T, cluster::Error>
+) -> Result<T, ClusterError>
 where
     F: std::panic::UnwindSafe + FnOnce(&'a Cluster) -> T,
 {
@@ -59,7 +59,7 @@ pub fn run_and_destroy<'a, F, T>(
     cluster: &'a Cluster,
     lock: lock::UnlockedFile,
     action: F,
-) -> Result<T, cluster::Error>
+) -> Result<T, ClusterError>
 where
     F: std::panic::UnwindSafe + FnOnce(&'a Cluster) -> T,
 {
@@ -75,7 +75,7 @@ where
 fn startup(
     cluster: &Cluster,
     mut lock: lock::UnlockedFile,
-) -> Result<lock::LockedFileShared, cluster::Error> {
+) -> Result<lock::LockedFileShared, ClusterError> {
     loop {
         lock = match lock.try_lock_exclusive() {
             Ok(Left(lock)) => {
@@ -114,9 +114,9 @@ fn shutdown<F, T>(
     cluster: &Cluster,
     lock: lock::LockedFileShared,
     action: F,
-) -> Result<Option<T>, cluster::Error>
+) -> Result<Option<T>, ClusterError>
 where
-    F: FnOnce(&Cluster) -> Result<T, cluster::Error>,
+    F: FnOnce(&Cluster) -> Result<T, ClusterError>,
 {
     match lock.try_lock_exclusive() {
         Ok(Left(lock)) => {

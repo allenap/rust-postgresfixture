@@ -16,6 +16,5 @@ mod error;
 mod partial;
 
 pub use current::Version;
-pub use error::Error;
-#[allow(clippy::module_name_repetitions)]
+pub use error::VersionError;
 pub use partial::PartialVersion;

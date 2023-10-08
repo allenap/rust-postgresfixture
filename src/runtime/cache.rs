@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::RwLock;
 
-use super::Error;
-use crate::version::{self, Version};
+use super::RuntimeError;
+use crate::version::{Version, VersionError};
 
 #[derive(Debug)]
 struct Entry {
@@ -36,7 +36,7 @@ lazy_static! {
 /// understand the nuances of PostgreSQL's versioning scheme.
 ///
 /// [versioning]: https://www.postgresql.org/support/versioning/
-pub fn version<P: AsRef<Path>>(binary: P) -> Result<Version, Error> {
+pub fn version<P: AsRef<Path>>(binary: P) -> Result<Version, RuntimeError> {
     let binary: PathBuf = binary.as_ref().canonicalize()?;
     let (size, hash) = {
         let mut file = File::open(&binary)?;
@@ -84,7 +84,7 @@ pub fn version<P: AsRef<Path>>(binary: P) -> Result<Version, Error> {
 /// understand the nuances of PostgreSQL's versioning scheme.
 ///
 /// [versioning]: https://www.postgresql.org/support/versioning/
-fn version_from_binary<P: AsRef<Path>>(binary: P) -> Result<Version, Error> {
+fn version_from_binary<P: AsRef<Path>>(binary: P) -> Result<Version, RuntimeError> {
     let output = Command::new(binary.as_ref()).arg("--version").output()?;
     if output.status.success() {
         let version_string = String::from_utf8_lossy(&output.stdout);
@@ -92,6 +92,6 @@ fn version_from_binary<P: AsRef<Path>>(binary: P) -> Result<Version, Error> {
         // "pg_ctl (PostgreSQL) 12.2" and get 12.2 out of it.
         Ok(version_string.parse()?)
     } else {
-        Err(version::Error::Missing)?
+        Err(VersionError::Missing)?
     }
 }

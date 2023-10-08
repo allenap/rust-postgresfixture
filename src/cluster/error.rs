@@ -6,12 +6,12 @@ use crate::runtime;
 use crate::version;
 
 #[derive(Debug)]
-pub enum Error {
+pub enum ClusterError {
     PathEncodingError, // Path is not UTF-8.
     IoError(io::Error),
     UnixError(nix::Error),
     UnsupportedVersion(version::Version),
-    UnknownVersion(version::Error),
+    UnknownVersion(version::VersionError),
     RuntimeNotFound(version::PartialVersion),
     RuntimeDefaultNotFound,
     DataDirectoryNotFound(PathBuf),
@@ -20,9 +20,9 @@ pub enum Error {
     Other(Output),
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for ClusterError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        use Error::*;
+        use ClusterError::*;
         match *self {
             PathEncodingError => write!(fmt, "path is not UTF-8"),
             IoError(ref e) => write!(fmt, "input/output error: {e}"),
@@ -39,53 +39,53 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error for Error {
+impl error::Error for ClusterError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
-            Error::PathEncodingError => None,
-            Error::IoError(ref error) => Some(error),
-            Error::UnixError(ref error) => Some(error),
-            Error::UnsupportedVersion(_) => None,
-            Error::UnknownVersion(ref error) => Some(error),
-            Error::RuntimeNotFound(_) => None,
-            Error::RuntimeDefaultNotFound => None,
-            Error::DataDirectoryNotFound(_) => None,
-            Error::DatabaseError(ref error) => Some(error),
-            Error::InUse => None,
-            Error::Other(_) => None,
+            ClusterError::PathEncodingError => None,
+            ClusterError::IoError(ref error) => Some(error),
+            ClusterError::UnixError(ref error) => Some(error),
+            ClusterError::UnsupportedVersion(_) => None,
+            ClusterError::UnknownVersion(ref error) => Some(error),
+            ClusterError::RuntimeNotFound(_) => None,
+            ClusterError::RuntimeDefaultNotFound => None,
+            ClusterError::DataDirectoryNotFound(_) => None,
+            ClusterError::DatabaseError(ref error) => Some(error),
+            ClusterError::InUse => None,
+            ClusterError::Other(_) => None,
         }
     }
 }
 
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Error {
-        Error::IoError(error)
+impl From<io::Error> for ClusterError {
+    fn from(error: io::Error) -> ClusterError {
+        ClusterError::IoError(error)
     }
 }
 
-impl From<nix::Error> for Error {
-    fn from(error: nix::Error) -> Error {
-        Error::UnixError(error)
+impl From<nix::Error> for ClusterError {
+    fn from(error: nix::Error) -> ClusterError {
+        ClusterError::UnixError(error)
     }
 }
 
-impl From<version::Error> for Error {
-    fn from(error: version::Error) -> Error {
-        Error::UnknownVersion(error)
+impl From<version::VersionError> for ClusterError {
+    fn from(error: version::VersionError) -> ClusterError {
+        ClusterError::UnknownVersion(error)
     }
 }
 
-impl From<postgres::error::Error> for Error {
-    fn from(error: postgres::error::Error) -> Error {
-        Error::DatabaseError(error)
+impl From<postgres::error::Error> for ClusterError {
+    fn from(error: postgres::error::Error) -> ClusterError {
+        ClusterError::DatabaseError(error)
     }
 }
 
-impl From<runtime::Error> for Error {
-    fn from(error: runtime::Error) -> Error {
+impl From<runtime::RuntimeError> for ClusterError {
+    fn from(error: runtime::RuntimeError) -> ClusterError {
         match error {
-            runtime::Error::IoError(error) => Error::IoError(error),
-            runtime::Error::VersionError(error) => Error::UnknownVersion(error),
+            runtime::RuntimeError::IoError(error) => ClusterError::IoError(error),
+            runtime::RuntimeError::VersionError(error) => ClusterError::UnknownVersion(error),
         }
     }
 }
