@@ -27,5 +27,6 @@
         "SIGINT",
         "synchronisation",
         "tempdir"
-    ]
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false
 }
