@@ -169,10 +169,17 @@ impl RuntimeStrategy for RuntimeStrategySet {
     /// Runtimes known to all strategies, in the same order as each strategy
     /// returns them.
     ///
-    /// Note that runtimes may be duplicated, and runtimes with the same version
-    /// number may be returned.
+    /// Note that runtimes are deduplicated by version number, i.e. if a runtime
+    /// with the same version number appears in multiple strategies, it will
+    /// only be returned the first time it is seen.
     fn runtimes(&self) -> Runtimes {
-        Box::new(self.0.iter().flat_map(|strategy| strategy.runtimes()))
+        let mut seen = std::collections::HashSet::new();
+        Box::new(
+            self.0
+                .iter()
+                .flat_map(|strategy| strategy.runtimes())
+                .filter(move |runtime| seen.insert(runtime.version)),
+        )
     }
 
     /// Asks each strategy in turn to select a runtime. The first non-[`None`]

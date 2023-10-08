@@ -29,7 +29,7 @@ use super::VersionError;
 /// page][versioning] is what this models.
 ///
 /// [versioning]: https://www.postgresql.org/support/versioning/
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Version {
     /// Pre-PostgreSQL 10, with major, point, and minor version numbers, e.g.
     /// 9.6.17. It is an error to create this variant with a major number >= 10.
