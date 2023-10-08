@@ -12,8 +12,8 @@ impl fmt::Display for RuntimeError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         use RuntimeError::*;
         match *self {
-            IoError(ref e) => write!(fmt, "input/output error: {}", e),
-            UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {}", e),
+            IoError(ref e) => write!(fmt, "input/output error: {e}"),
+            UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {e}"),
         }
     }
 }

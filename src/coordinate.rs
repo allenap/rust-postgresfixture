@@ -9,7 +9,7 @@
 //! let cluster_dir = tempdir::TempDir::new("cluster")?;
 //! let data_dir = cluster_dir.path().join("data");
 //! let runtime = strategy::default();
-//! let cluster = Cluster::new(&data_dir, runtime)?;
+//! let cluster = Cluster::new(&data_dir, &runtime)?;
 //! let lock_file = cluster_dir.path().join("lock");
 //! let lock = lock::UnlockedFile::try_from(lock_file.as_path())?;
 //! assert!(coordinate::run_and_stop(&cluster, lock, cluster::exists)?);
@@ -41,7 +41,7 @@ where
 {
     let lock = startup(cluster, lock)?;
     let action_res = std::panic::catch_unwind(|| action(cluster));
-    let _: Option<bool> = shutdown(cluster, lock, |cluster| cluster.stop())?;
+    let _: Option<bool> = shutdown(cluster, lock, Cluster::stop)?;
     match action_res {
         Ok(result) => Ok(result),
         Err(err) => std::panic::resume_unwind(err),
@@ -65,7 +65,7 @@ where
 {
     let lock = startup(cluster, lock)?;
     let action_res = std::panic::catch_unwind(|| action(cluster));
-    let shutdown_res = shutdown(cluster, lock, |cluster| cluster.destroy());
+    let shutdown_res = shutdown(cluster, lock, Cluster::destroy);
     match action_res {
         Ok(result) => shutdown_res.map(|_| result),
         Err(err) => std::panic::resume_unwind(err),
@@ -79,27 +79,25 @@ fn startup(
     loop {
         lock = match lock.try_lock_exclusive() {
             Ok(Left(lock)) => {
-                // The cluster is locked exclusively. Switch to a shared
-                // lock optimistically.
+                // The cluster is locked exclusively. Switch to a shared lock
+                // optimistically.
                 let lock = lock.lock_shared()?;
                 // The cluster may have been stopped while held in that
-                // exclusive lock, so we must check if the cluster is
-                // running _now_, else loop back to the top again.
+                // exclusive lock, so we must check if the cluster is running
+                // _now_, else loop back to the top again.
                 if cluster.running()? {
                     return Ok(lock);
-                } else {
-                    // Release all locks then sleep for a random time between
-                    // 200ms and 1000ms in an attempt to make sure that when
-                    // there are many competing processes one of them rapidly
-                    // acquires an exclusive lock and is able to create and
-                    // start the cluster.
-                    let lock = lock.unlock()?;
-                    let delay = rand::thread_rng().next_u32();
-                    let delay = 200 + (delay % 800);
-                    let delay = Duration::from_millis(delay as u64);
-                    std::thread::sleep(delay);
-                    lock
                 }
+                // Release all locks then sleep for a random time between 200ms
+                // and 1000ms in an attempt to make sure that when there are
+                // many competing processes one of them rapidly acquires an
+                // exclusive lock and is able to create and start the cluster.
+                let lock = lock.unlock()?;
+                let delay = rand::thread_rng().next_u32();
+                let delay = 200 + (delay % 800);
+                let delay = Duration::from_millis(u64::from(delay));
+                std::thread::sleep(delay);
+                lock
             }
             Ok(Right(lock)) => {
                 // We have an exclusive lock, so try to start the cluster.

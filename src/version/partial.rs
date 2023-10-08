@@ -128,6 +128,7 @@ impl PartialVersion {
     }
 
     /// Remove minor number.
+    #[must_use]
     pub fn widened(&self) -> PartialVersion {
         use PartialVersion::*;
         match self {

@@ -17,8 +17,8 @@ fn runtimes() -> Box<dyn Iterator<Item = Runtime>> {
 #[test]
 fn cluster_new() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
-        let cluster = Cluster::new("some/path", runtime)?;
+        println!("{runtime:?}");
+        let cluster = Cluster::new("some/path", &runtime)?;
         assert_eq!(Path::new("some/path"), cluster.datadir);
         assert!(!cluster.running()?);
     }
@@ -28,8 +28,8 @@ fn cluster_new() -> TestResult {
 #[test]
 fn cluster_does_not_exist() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
-        let cluster = Cluster::new("some/path", runtime)?;
+        println!("{runtime:?}");
+        let cluster = Cluster::new("some/path", &runtime)?;
         assert!(!exists(&cluster));
     }
     Ok(())
@@ -38,12 +38,12 @@ fn cluster_does_not_exist() -> TestResult {
 #[test]
 fn cluster_does_exist() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let data_dir = tempdir::TempDir::new("data")?;
-        let cluster = Cluster::new(&data_dir, runtime.clone())?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         cluster.create()?;
         assert!(exists(&cluster));
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         assert!(exists(&cluster));
     }
     Ok(())
@@ -52,8 +52,8 @@ fn cluster_does_exist() -> TestResult {
 #[test]
 fn cluster_has_no_version_when_it_does_not_exist() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
-        let cluster = Cluster::new("some/path", runtime)?;
+        println!("{runtime:?}");
+        let cluster = Cluster::new("some/path", &runtime)?;
         assert!(matches!(version(&cluster), Ok(None)));
     }
     Ok(())
@@ -65,11 +65,11 @@ fn cluster_has_version_when_it_does_exist() -> TestResult {
     let version_file = data_dir.path().join("PG_VERSION");
     File::create(&version_file)?;
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let pg_version: PartialVersion = runtime.version.into();
         let pg_version = pg_version.widened(); // e.g. 9.6.5 -> 9.6 or 14.3 -> 14.
         std::fs::write(&version_file, format!("{pg_version}\n"))?;
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         assert!(matches!(version(&cluster), Ok(Some(_))));
     }
     Ok(())
@@ -79,8 +79,8 @@ fn cluster_has_version_when_it_does_exist() -> TestResult {
 fn cluster_has_pid_file() -> TestResult {
     let data_dir = PathBuf::from("/some/where");
     for runtime in runtimes() {
-        println!("{:?}", runtime);
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        println!("{runtime:?}");
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         assert_eq!(
             PathBuf::from("/some/where/postmaster.pid"),
             cluster.pidfile()
@@ -93,8 +93,8 @@ fn cluster_has_pid_file() -> TestResult {
 fn cluster_has_log_file() -> TestResult {
     let data_dir = PathBuf::from("/some/where");
     for runtime in runtimes() {
-        println!("{:?}", runtime);
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        println!("{runtime:?}");
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         assert_eq!(
             PathBuf::from("/some/where/postmaster.log"),
             cluster.logfile()
@@ -106,9 +106,9 @@ fn cluster_has_log_file() -> TestResult {
 #[test]
 fn cluster_create_creates_cluster() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let data_dir = tempdir::TempDir::new("data")?;
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         assert!(!exists(&cluster));
         assert!(cluster.create()?);
         assert!(exists(&cluster));
@@ -119,9 +119,9 @@ fn cluster_create_creates_cluster() -> TestResult {
 #[test]
 fn cluster_create_creates_cluster_with_neutral_locale_and_timezone() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let data_dir = tempdir::TempDir::new("data")?;
-        let cluster = Cluster::new(&data_dir, runtime.clone())?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         cluster.start()?;
         let mut conn = cluster.connect("postgres")?;
         let result = conn.query("SHOW ALL", &[])?;
@@ -171,7 +171,7 @@ fn cluster_create_creates_cluster_with_neutral_locale_and_timezone() -> TestResu
             //
             // It's not yet clear if this is a bug or intentional.
             // https://www.postgresql.org/message-id/18136-4914128da6cfc502%40postgresql.org
-            assert_eq!(params.get("lc_messages"), Some(&"".into()));
+            assert_eq!(params.get("lc_messages"), Some(&String::new()));
         } else {
             assert_eq!(params.get("lc_collate"), Some(&"C".into()));
             assert_eq!(params.get("lc_ctype"), Some(&"C".into()));
@@ -188,9 +188,9 @@ fn cluster_create_creates_cluster_with_neutral_locale_and_timezone() -> TestResu
 #[test]
 fn cluster_create_does_nothing_when_it_already_exists() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let data_dir = tempdir::TempDir::new("data")?;
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         assert!(!exists(&cluster));
         assert!(cluster.create()?);
         assert!(exists(&cluster));
@@ -202,9 +202,9 @@ fn cluster_create_does_nothing_when_it_already_exists() -> TestResult {
 #[test]
 fn cluster_start_stop_starts_and_stops_cluster() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let data_dir = tempdir::TempDir::new("data")?;
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         cluster.create()?;
         assert!(!cluster.running()?);
         cluster.start()?;
@@ -218,9 +218,9 @@ fn cluster_start_stop_starts_and_stops_cluster() -> TestResult {
 #[test]
 fn cluster_destroy_stops_and_removes_cluster() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let data_dir = tempdir::TempDir::new("data")?;
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         cluster.create()?;
         cluster.start()?;
         assert!(exists(&cluster));
@@ -233,9 +233,9 @@ fn cluster_destroy_stops_and_removes_cluster() -> TestResult {
 #[test]
 fn cluster_connect_connects() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let data_dir = tempdir::TempDir::new("data")?;
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         cluster.start()?;
         cluster.connect("template1")?;
         cluster.destroy()?;
@@ -246,15 +246,14 @@ fn cluster_connect_connects() -> TestResult {
 #[test]
 fn cluster_databases_returns_vec_of_database_names() -> TestResult {
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let data_dir = tempdir::TempDir::new("data")?;
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         cluster.start()?;
 
         let expected: HashSet<String> = ["postgres", "template0", "template1"]
             .iter()
-            .cloned()
-            .map(|s| s.to_string())
+            .map(ToString::to_string)
             .collect();
         let observed: HashSet<String> = cluster.databases()?.iter().cloned().collect();
         assert_eq!(expected, observed);
@@ -269,9 +268,9 @@ fn cluster_databases_with_non_plain_names_can_be_created_and_dropped() -> TestRe
     // PostgreSQL identifiers containing hyphens, for example, or where we
     // want to preserve capitalisation, are possible.
     for runtime in runtimes() {
-        println!("{:?}", runtime);
+        println!("{runtime:?}");
         let data_dir = tempdir::TempDir::new("data")?;
-        let cluster = Cluster::new(&data_dir, runtime)?;
+        let cluster = Cluster::new(&data_dir, &runtime)?;
         cluster.start()?;
         cluster.createdb("foo-bar")?;
         cluster.createdb("Foo-BAR")?;
@@ -279,8 +278,7 @@ fn cluster_databases_with_non_plain_names_can_be_created_and_dropped() -> TestRe
         let expected: HashSet<String> =
             ["foo-bar", "Foo-BAR", "postgres", "template0", "template1"]
                 .iter()
-                .cloned()
-                .map(|s| s.to_string())
+                .map(ToString::to_string)
                 .collect();
         let observed: HashSet<String> = cluster.databases()?.iter().cloned().collect();
         assert_eq!(expected, observed);

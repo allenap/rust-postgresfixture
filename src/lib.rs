@@ -1,3 +1,11 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::enum_glob_use)]
+#![allow(clippy::many_single_char_names)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+
 //!
 //! The essential functionality in this crate is in the `Cluster` struct and its
 //! implementation. This covers the logic you need to create, run, and destroy
@@ -8,7 +16,7 @@
 //! use postgresfixture::prelude::*;
 //! for runtime in strategy::default().runtimes() {
 //!   let data_dir = tempdir::TempDir::new("data")?;
-//!   let cluster = Cluster::new(&data_dir, runtime)?;
+//!   let cluster = Cluster::new(&data_dir, &runtime)?;
 //!   cluster.start()?;
 //!   assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
 //!   let mut conn = cluster.connect("template1")?;

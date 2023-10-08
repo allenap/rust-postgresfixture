@@ -45,10 +45,13 @@ impl Runtime {
     /// let version = runtime.execute("pg_ctl").arg("--version").output()?;
     /// # Ok::<(), runtime::RuntimeError>(())
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if it's not possible to calculate `PATH`; see
+    /// [`env::join_paths`].
     pub fn execute<T: AsRef<OsStr>>(&self, program: T) -> Command {
         let mut command = Command::new(self.bindir.join(program.as_ref()));
-        // For now, panic if we can't manipulate PATH.
-        // TODO: Print warning if this fails.
         command.env(
             "PATH",
             util::prepend_to_path(&self.bindir, env::var_os("PATH")).unwrap(),
@@ -67,10 +70,13 @@ impl Runtime {
     /// let version = runtime.command("bash").arg("-c").arg("echo hello").output();
     /// # Ok::<(), runtime::RuntimeError>(())
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if it's not possible to calculate `PATH`; see
+    /// [`env::join_paths`].
     pub fn command<T: AsRef<OsStr>>(&self, program: T) -> Command {
         let mut command = Command::new(program);
-        // For now, panic if we can't manipulate PATH.
-        // TODO: Print warning if this fails.
         command.env(
             "PATH",
             util::prepend_to_path(&self.bindir, env::var_os("PATH")).unwrap(),

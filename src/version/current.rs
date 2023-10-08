@@ -42,8 +42,8 @@ pub enum Version {
 impl fmt::Display for Version {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Version::Pre10(a, b, c) => fmt.pad(&format!("{}.{}.{}", a, b, c)),
-            Version::Post10(a, b) => fmt.pad(&format!("{}.{}", a, b)),
+            Version::Pre10(a, b, c) => fmt.pad(&format!("{a}.{b}.{c}")),
+            Version::Post10(a, b) => fmt.pad(&format!("{a}.{b}")),
         }
     }
 }

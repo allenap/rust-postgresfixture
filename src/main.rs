@@ -137,7 +137,7 @@ where
         .with_section(|| lock_uuid.to_string().header("UUID for lock file:"))?;
 
     let strategy = runtime::strategy::default();
-    let cluster = cluster::Cluster::new(&database_dir, strategy)?;
+    let cluster = cluster::Cluster::new(&database_dir, &strategy)?;
 
     let runner = if destroy {
         coordinate::run_and_destroy

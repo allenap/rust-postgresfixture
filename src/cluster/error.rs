@@ -25,16 +25,16 @@ impl fmt::Display for ClusterError {
         use ClusterError::*;
         match *self {
             PathEncodingError => write!(fmt, "path is not UTF-8"),
-            IoError(ref e) => write!(fmt, "input/output error: {}", e),
-            UnixError(ref e) => write!(fmt, "UNIX error: {}", e),
-            UnsupportedVersion(ref e) => write!(fmt, "PostgreSQL version not supported: {}", e),
-            UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {}", e),
+            IoError(ref e) => write!(fmt, "input/output error: {e}"),
+            UnixError(ref e) => write!(fmt, "UNIX error: {e}"),
+            UnsupportedVersion(ref e) => write!(fmt, "PostgreSQL version not supported: {e}"),
+            UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {e}"),
             RuntimeNotFound(ref v) => write!(fmt, "PostgreSQL runtime not found for version {v}"),
             RuntimeDefaultNotFound => write!(fmt, "PostgreSQL runtime not found"),
             DataDirectoryNotFound(ref p) => write!(fmt, "data directory not found in {p:?}"),
-            DatabaseError(ref e) => write!(fmt, "database error: {}", e),
+            DatabaseError(ref e) => write!(fmt, "database error: {e}"),
             InUse => write!(fmt, "cluster in use; cannot lock exclusively"),
-            Other(ref e) => write!(fmt, "external command failed: {:?}", e),
+            Other(ref e) => write!(fmt, "external command failed: {e:?}"),
         }
     }
 }

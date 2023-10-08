@@ -106,7 +106,7 @@ impl RuntimesOnPlatform {
             .ok()
             .map(|entries| {
                 entries
-                    .filter_map(|entry| entry.ok())
+                    .filter_map(Result::ok)
                     .filter(|path| path.is_file())
                     .filter_map(|path| path.parent().map(Path::to_owned))
                     .collect()
@@ -142,7 +142,7 @@ impl RuntimesOnPlatform {
             })
             .map(|entries| {
                 entries
-                    .filter_map(|entry| entry.ok())
+                    .filter_map(Result::ok)
                     .filter(|path| path.is_file())
                     .filter_map(|path| path.parent().map(Path::to_owned))
                     .collect()
@@ -185,19 +185,13 @@ impl RuntimeStrategy for RuntimeStrategySet {
     /// Asks each strategy in turn to select a runtime. The first non-[`None`]
     /// answer is selected.
     fn select(&self, version: &version::PartialVersion) -> Option<Runtime> {
-        self.0
-            .iter()
-            .filter_map(|strategy| strategy.select(version))
-            .next()
+        self.0.iter().find_map(|strategy| strategy.select(version))
     }
 
     /// Asks each strategy in turn for a fallback runtime. The first
     /// non-[`None`] answer is selected.
     fn fallback(&self) -> Option<Runtime> {
-        self.0
-            .iter()
-            .filter_map(|strategy| strategy.fallback())
-            .next()
+        self.0.iter().find_map(|strategy| strategy.fallback())
     }
 }
 
@@ -280,6 +274,6 @@ mod tests {
         let runtimes = strategy.runtimes();
         assert_ne!(0, runtimes.count());
         // There is always a fallback.
-        assert!(matches!(strategy.fallback(), Some(_)));
+        assert!(strategy.fallback().is_some());
     }
 }

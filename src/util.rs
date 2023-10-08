@@ -27,7 +27,7 @@ mod tests {
 
     #[test]
     fn test_prepend_to_path_prepends_given_dir_to_path() -> TestResult {
-        let path = env::join_paths(&[
+        let path = env::join_paths([
             tempdir::TempDir::new("aaa")?.path(),
             tempdir::TempDir::new("bbb")?.path(),
         ])?;
@@ -45,7 +45,7 @@ mod tests {
     #[test]
     fn test_prepend_to_path_moves_dir_to_front_of_path() -> TestResult {
         let tempdir = tempdir::TempDir::new("bin")?;
-        let path = env::join_paths(&[
+        let path = env::join_paths([
             tempdir::TempDir::new("aaa")?.path(),
             tempdir::TempDir::new("bbb")?.path(),
             tempdir.path(),
