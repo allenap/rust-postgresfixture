@@ -10,19 +10,13 @@ jobs:
     name: Build macOS ARM
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          target: aarch64-apple-darwin
-      - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target aarch64-apple-darwin
-      - uses: actions/upload-artifact@v2
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target aarch64-apple-darwin
+      - uses: actions/upload-artifact@v3
         with:
           name: aarch64-apple-darwin
           path: target/aarch64-apple-darwin/release/postgresfixture
@@ -32,19 +26,13 @@ jobs:
     name: Build macOS Intel
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          target: x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target x86_64-apple-darwin
-      - uses: actions/upload-artifact@v2
+          targets: x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target x86_64-apple-darwin
+      - uses: actions/upload-artifact@v3
         with:
           name: x86_64-apple-darwin
           path: target/x86_64-apple-darwin/release/postgresfixture
@@ -55,11 +43,11 @@ jobs:
     runs-on: macos-latest
     needs: [aarch64-apple-darwin, x86_64-apple-darwin]
     steps:
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         with:
           name: x86_64-apple-darwin
           path: postgresfixture-x86_64-apple-darwin
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         with:
           name: aarch64-apple-darwin
           path: postgresfixture-aarch64-apple-darwin
@@ -71,7 +59,7 @@ jobs:
             -output postgresfixture-apple-darwin \
             postgresfixture-x86_64-apple-darwin/postgresfixture \
             postgresfixture-aarch64-apple-darwin/postgresfixture
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: apple-darwin
           path: postgresfixture-apple-darwin
@@ -79,21 +67,15 @@ jobs:
 
   build-linux:
     name: Build Linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          target: x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target x86_64-unknown-linux-musl
-      - uses: actions/upload-artifact@v2
+          targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target x86_64-unknown-linux-musl
+      - uses: actions/upload-artifact@v3
         with:
           name: linux
           path: target/x86_64-unknown-linux-musl/release/postgresfixture
@@ -104,11 +86,11 @@ jobs:
     needs: [macos-universal, build-linux]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         with:
           name: linux
           path: linux
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         with:
           name: apple-darwin
       - name: Rename executables
