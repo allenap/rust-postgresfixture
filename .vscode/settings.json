@@ -24,6 +24,7 @@
         "postgresfixture",
         "psql",
         "runtimes",
+        "rustfmt",
         "SIGINT",
         "synchronisation",
         "tempdir"
