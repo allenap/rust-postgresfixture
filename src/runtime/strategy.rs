@@ -244,8 +244,9 @@ pub fn default() -> impl RuntimeStrategy {
 mod tests {
     use std::env;
 
-    use super::{RuntimeStrategy, RuntimesOnPath, RuntimesOnPlatform};
+    use super::{RuntimeStrategy, RuntimeStrategySet, RuntimesOnPath, RuntimesOnPlatform};
 
+    /// This will fail if there are no PostgreSQL runtimes installed.
     #[test]
     fn runtime_find_custom_path() {
         let path = env::var_os("PATH").expect("PATH not set");
@@ -254,12 +255,14 @@ mod tests {
         assert_ne!(0, runtimes.count());
     }
 
+    /// This will fail if there are no PostgreSQL runtimes installed.
     #[test]
     fn runtime_find_env_path() {
         let runtimes = RuntimesOnPath::Env.runtimes();
         assert_ne!(0, runtimes.count());
     }
 
+    /// This will fail if there are no PostgreSQL runtimes installed.
     #[test]
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn runtime_find_on_platform() {
@@ -267,5 +270,16 @@ mod tests {
         assert_ne!(0, runtimes.count());
     }
 
-    // TODO: Test `RuntimeStrategySet`.
+    /// This will fail if there are no PostgreSQL runtimes installed. It's also
+    /// somewhat fragile because it relies upon knowing the implementation of
+    /// the strategies of which the default [`RuntimeStrategySet`] is composed.
+    #[test]
+    fn runtime_strategy_set_default() {
+        let strategy = RuntimeStrategySet::default();
+        // There is at least one runtime available.
+        let runtimes = strategy.runtimes();
+        assert_ne!(0, runtimes.count());
+        // There is always a fallback.
+        assert!(matches!(strategy.fallback(), Some(_)));
+    }
 }
