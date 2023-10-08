@@ -21,7 +21,7 @@ use std::time::Duration;
 use either::Either::{Left, Right};
 use rand::RngCore;
 
-use crate::cluster::{Cluster, ClusterError};
+use crate::cluster::{Cluster, ClusterError, State};
 use crate::lock;
 
 /// Perform `action` in `cluster`.
@@ -41,7 +41,7 @@ where
 {
     let lock = startup(cluster, lock)?;
     let action_res = std::panic::catch_unwind(|| action(cluster));
-    let _: Option<bool> = shutdown(cluster, lock, Cluster::stop)?;
+    let _: Option<State> = shutdown(cluster, lock, Cluster::stop)?;
     match action_res {
         Ok(result) => Ok(result),
         Err(err) => std::panic::resume_unwind(err),

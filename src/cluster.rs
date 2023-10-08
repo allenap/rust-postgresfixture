@@ -60,6 +60,8 @@ impl Cluster {
         }
     }
 
+    /// Return a [`Command`] that will invoke `pg_ctl` with the environment
+    /// referring to this cluster.
     fn ctl(&self) -> Result<Command, ClusterError> {
         let mut command = self.runtime()?.execute("pg_ctl");
         command.env("PGDATA", &self.datadir);
@@ -180,18 +182,18 @@ impl Cluster {
     }
 
     /// Create the cluster if it does not already exist.
-    pub fn create(&self) -> Result<bool, ClusterError> {
+    pub fn create(&self) -> Result<State, ClusterError> {
         match self._create() {
-            Err(ClusterError::UnixError(Errno::EAGAIN)) if exists(self) => Ok(false),
+            Err(ClusterError::UnixError(Errno::EAGAIN)) if exists(self) => Ok(Unmodified),
             Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
             other => other,
         }
     }
 
-    fn _create(&self) -> Result<bool, ClusterError> {
+    fn _create(&self) -> Result<State, ClusterError> {
         if exists(self) {
             // Nothing more to do; the cluster is already in place.
-            Ok(false)
+            Ok(Unmodified)
         } else {
             // Create the cluster and report back that we did so.
             fs::create_dir_all(&self.datadir)?;
@@ -206,26 +208,26 @@ impl Cluster {
                 .arg("-E utf8 --locale C -A trust")
                 .env("TZ", "UTC")
                 .output()?;
-            Ok(true)
+            Ok(Modified)
         }
     }
 
-    // Start the cluster if it's not already running.
-    pub fn start(&self) -> Result<bool, ClusterError> {
+    /// Start the cluster if it's not already running.
+    pub fn start(&self) -> Result<State, ClusterError> {
         match self._start() {
-            Err(ClusterError::UnixError(Errno::EAGAIN)) if self.running()? => Ok(false),
+            Err(ClusterError::UnixError(Errno::EAGAIN)) if self.running()? => Ok(Unmodified),
             Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
             other => other,
         }
     }
 
-    fn _start(&self) -> Result<bool, ClusterError> {
+    fn _start(&self) -> Result<State, ClusterError> {
         // Ensure that the cluster has been created.
         self._create()?;
         // Check if we're running already.
         if self.running()? {
             // We didn't start this cluster; say so.
-            return Ok(false);
+            return Ok(Unmodified);
         }
         // Next, invoke `pg_ctl` to start the cluster.
         // pg_ctl options:
@@ -249,10 +251,10 @@ impl Cluster {
             })
             .output()?;
         // We did actually start the cluster; say so.
-        Ok(true)
+        Ok(Modified)
     }
 
-    // Connect to this cluster.
+    /// Connect to this cluster.
     pub fn connect(&self, database: &str) -> Result<postgres::Client, ClusterError> {
         let user = &env::var("USER").unwrap_or_else(|_| "USER-not-set".to_string());
         let host = self.datadir.to_string_lossy(); // postgres crate API limitation.
@@ -264,6 +266,7 @@ impl Cluster {
         Ok(client)
     }
 
+    /// Run `psql` against this cluster, in the given database.
     pub fn shell(&self, database: &str) -> Result<ExitStatus, ClusterError> {
         let mut command = self.runtime()?.execute("psql");
         command.arg("--quiet");
@@ -273,6 +276,10 @@ impl Cluster {
         Ok(command.spawn()?.wait()?)
     }
 
+    /// Run the given command against this cluster.
+    ///
+    /// The command is run with the `PGDATA`, `PGHOST`, and `PGDATABASE`
+    /// environment variables set appropriately.
     pub fn exec<T: AsRef<OsStr>>(
         &self,
         database: &str,
@@ -287,7 +294,7 @@ impl Cluster {
         Ok(command.spawn()?.wait()?)
     }
 
-    // The names of databases in this cluster.
+    /// The names of databases in this cluster.
     pub fn databases(&self) -> Result<Vec<String>, ClusterError> {
         let mut conn = self.connect("template1")?;
         let rows = conn.query(
@@ -299,40 +306,40 @@ impl Cluster {
     }
 
     /// Create the named database.
-    pub fn createdb(&self, database: &str) -> Result<bool, ClusterError> {
+    pub fn createdb(&self, database: &str) -> Result<(), ClusterError> {
         let statement = format!(
             "CREATE DATABASE {}",
             postgres_protocol::escape::escape_identifier(database)
         );
         self.connect("template1")?
             .execute(statement.as_str(), &[])?;
-        Ok(true)
+        Ok(())
     }
 
     /// Drop the named database.
-    pub fn dropdb(&self, database: &str) -> Result<bool, ClusterError> {
+    pub fn dropdb(&self, database: &str) -> Result<(), ClusterError> {
         let statement = format!(
             "DROP DATABASE {}",
             postgres_protocol::escape::escape_identifier(database)
         );
         self.connect("template1")?
             .execute(statement.as_str(), &[])?;
-        Ok(true)
+        Ok(())
     }
 
-    // Stop the cluster if it's running.
-    pub fn stop(&self) -> Result<bool, ClusterError> {
+    /// Stop the cluster if it's running.
+    pub fn stop(&self) -> Result<State, ClusterError> {
         match self._stop() {
-            Err(ClusterError::UnixError(Errno::EAGAIN)) if !self.running()? => Ok(false),
+            Err(ClusterError::UnixError(Errno::EAGAIN)) if !self.running()? => Ok(Unmodified),
             Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
             other => other,
         }
     }
 
-    fn _stop(&self) -> Result<bool, ClusterError> {
+    fn _stop(&self) -> Result<State, ClusterError> {
         // If the cluster's not already running, don't do anything.
         if !self.running()? {
-            return Ok(false);
+            return Ok(Unmodified);
         }
         // pg_ctl options:
         //  -w -- wait for shutdown to complete.
@@ -344,23 +351,23 @@ impl Cluster {
             .arg("-m")
             .arg("fast")
             .output()?;
-        Ok(true)
+        Ok(Modified)
     }
 
-    // Destroy the cluster if it exists, after stopping it.
-    pub fn destroy(&self) -> Result<bool, ClusterError> {
+    /// Destroy the cluster if it exists, after stopping it.
+    pub fn destroy(&self) -> Result<State, ClusterError> {
         match self._destroy() {
             Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
             other => other,
         }
     }
 
-    fn _destroy(&self) -> Result<bool, ClusterError> {
-        if self._stop()? || self.datadir.is_dir() {
+    fn _destroy(&self) -> Result<State, ClusterError> {
+        if self._stop()? == Modified || self.datadir.is_dir() {
             fs::remove_dir_all(&self.datadir)?;
-            Ok(true)
+            Ok(Modified)
         } else {
-            Ok(false)
+            Ok(Unmodified)
         }
     }
 }
@@ -370,6 +377,19 @@ impl AsRef<Path> for Cluster {
         &self.datadir
     }
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum State {
+    /// The action we requested was performed from this process, e.g. we tried
+    /// to create the cluster, and we did indeed create the cluster.
+    Modified,
+    /// The action we requested was performed by another process, or was not
+    /// necessary, e.g. we tried to stop the cluster but it was already stopped.
+    Unmodified,
+}
+
+// For convenience.
+use State::{Modified, Unmodified};
 
 /// A fairly simplistic but quick check: does the directory exist and does it
 /// look like a PostgreSQL cluster data directory, i.e. does it contain a file
