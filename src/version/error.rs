@@ -17,7 +17,7 @@ impl fmt::Display for VersionError {
 }
 
 impl error::Error for VersionError {
-    fn cause(&self) -> Option<&dyn error::Error> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         None
     }
 }

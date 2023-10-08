@@ -6,173 +6,56 @@
 //! can traverse your `PATH` to discover all the versions currently available to
 //! you.
 
+mod error;
+pub mod strategy;
+
+use std::env;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{env, error, fmt, io};
 
 use crate::util;
-use crate::version;
+use crate::version::{self, VersionError};
+pub use error::RuntimeError;
 
-#[derive(Debug)]
-pub enum RuntimeError {
-    IoError(io::Error),
-    UnknownVersion(version::VersionError),
-}
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        use RuntimeError::*;
-        match *self {
-            IoError(ref e) => write!(fmt, "input/output error: {}", e),
-            UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {}", e),
-        }
-    }
-}
-
-impl error::Error for RuntimeError {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
-            RuntimeError::IoError(ref error) => Some(error),
-            RuntimeError::UnknownVersion(ref error) => Some(error),
-        }
-    }
-}
-
-impl From<io::Error> for RuntimeError {
-    fn from(error: io::Error) -> RuntimeError {
-        RuntimeError::IoError(error)
-    }
-}
-
-impl From<version::VersionError> for RuntimeError {
-    fn from(error: version::VersionError) -> RuntimeError {
-        RuntimeError::UnknownVersion(error)
-    }
-}
-
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Runtime {
     /// Path to the directory containing the `pg_ctl` executable and other
     /// PostgreSQL binaries.
-    ///
-    /// Can be omitted (i.e. [`None`]) to search `PATH` only.
-    pub bindir: Option<PathBuf>,
+    pub bindir: PathBuf,
+
+    /// Version of this runtime.
+    pub version: version::Version,
 }
 
 impl Runtime {
-    /// Find runtimes on the given path.
-    ///
-    /// Parses input according to platform conventions for the `PATH`
-    /// environment variable. See [`env::split_paths`] for details.
-    pub fn find<T: AsRef<OsStr> + ?Sized>(path: &T) -> Vec<Self> {
-        env::split_paths(path)
-            .filter(|bindir| bindir.join("pg_ctl").exists())
-            .map(|bindir| Self {
-                bindir: Some(bindir),
-            })
-            .collect()
-    }
-
-    /// Find runtimes on `PATH` (environment variable).
-    pub fn find_on_path() -> Vec<Self> {
-        match env::var_os("PATH") {
-            Some(path) => Self::find(&path),
-            None => vec![],
-        }
-    }
-
-    /// Find runtimes using platform-specific knowledge (Linux).
-    ///
-    /// For example: on Debian and Ubuntu, check `/usr/lib/postgresql`.
-    #[cfg(any(doc, target_os = "linux"))]
-    pub fn find_on_platform() -> Vec<Self> {
-        glob::glob("/usr/lib/postgresql/*/bin/pg_ctl")
-            .ok()
-            .map(|entries| {
-                entries
-                    .filter_map(|entry| entry.ok())
-                    .filter(|path| path.is_file())
-                    .filter_map(|path| path.parent().map(Self::new))
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    /// Find runtimes using platform-specific knowledge (macOS).
-    ///
-    /// For example: check Homebrew.
-    #[cfg(any(doc, target_os = "macos"))]
-    pub fn find_on_platform() -> Vec<Self> {
-        use std::ffi::OsString;
-        use std::os::unix::ffi::OsStringExt;
-
-        Command::new("brew")
-            .arg("--prefix")
-            .output()
-            .ok()
-            .map(|output| OsString::from_vec(output.stdout))
-            .and_then(|brew_prefix| {
-                glob::glob(&format!(
-                    "{}/Cellar/postgresql@*/*/bin/pg_ctl",
-                    brew_prefix.to_string_lossy().trim_end()
-                ))
-                .ok()
-            })
-            .map(|entries| {
-                entries
-                    .filter_map(|entry| entry.ok())
-                    .filter(|path| path.is_file())
-                    .filter_map(|path| path.parent().map(Self::new))
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    pub fn new<P: AsRef<Path>>(bindir: P) -> Self {
-        Self {
-            bindir: Some(bindir.as_ref().to_path_buf()),
-        }
-    }
-
-    /// Get the version of PostgreSQL from `pg_ctl`.
-    ///
-    /// <https://www.postgresql.org/support/versioning/> shows that version
-    /// numbers are **not** SemVer compatible. The [`version`][`crate::version`]
-    /// module in this crate can parse the version string returned by this
-    /// function.
-    pub fn version(&self) -> Result<version::Version, RuntimeError> {
-        // Execute pg_ctl and extract version.
-        let version_output = self.execute("pg_ctl").arg("--version").output()?;
-        let version_string = String::from_utf8_lossy(&version_output.stdout);
-        // The version parser can deal with leading garbage, i.e. it can parse
-        // "pg_ctl (PostgreSQL) 12.2" and get 12.2 out of it.
-        Ok(version_string.parse()?)
+    pub fn new<P: AsRef<Path>>(bindir: P) -> Result<Self, RuntimeError> {
+        Ok(Self {
+            bindir: bindir.as_ref().to_owned(),
+            version: version(bindir)?,
+        })
     }
 
     /// Return a [`Command`] prepped to run the given `program` in this
     /// PostgreSQL runtime.
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::Runtime;
-    /// let version = Runtime::default().execute("pg_ctl").arg("--version").output().unwrap();
+    /// # use postgresfixture::runtime::{self, Runtime, strategy::{RuntimeStrategy}};
+    /// # let runtime = runtime::strategy::default().fallback().unwrap();
+    /// let version = runtime.execute("pg_ctl").arg("--version").output()?;
+    /// # Ok::<(), runtime::RuntimeError>(())
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if it's not possible to calculate `PATH`; see
+    /// [`env::join_paths`].
     pub fn execute<T: AsRef<OsStr>>(&self, program: T) -> Command {
-        let mut command;
-        match self.bindir {
-            Some(ref bindir) => {
-                command = Command::new(bindir.join(program.as_ref()));
-                // For now, panic if we can't manipulate PATH.
-                // TODO: Print warning if this fails.
-                command.env(
-                    "PATH",
-                    util::prepend_to_path(bindir, env::var_os("PATH")).unwrap(),
-                );
-            }
-            None => {
-                command = Command::new(program);
-            }
-        }
+        let mut command = Command::new(self.bindir.join(program.as_ref()));
+        command.env(
+            "PATH",
+            util::prepend_to_path(&self.bindir, env::var_os("PATH")).unwrap(),
+        );
         command
     }
 
@@ -182,50 +65,56 @@ impl Runtime {
     /// [`Self::bindir`].
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::Runtime;
-    /// let version = Runtime::default().command("bash").arg("-c").arg("echo hello").output().unwrap();
+    /// # use postgresfixture::runtime::{self, strategy::RuntimeStrategy};
+    /// # let runtime = runtime::strategy::default().fallback().unwrap();
+    /// let version = runtime.command("bash").arg("-c").arg("echo hello").output();
+    /// # Ok::<(), runtime::RuntimeError>(())
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if it's not possible to calculate `PATH`; see
+    /// [`env::join_paths`].
     pub fn command<T: AsRef<OsStr>>(&self, program: T) -> Command {
-        let mut command;
-        match self.bindir {
-            Some(ref bindir) => {
-                command = Command::new(program);
-                // For now, panic if we can't manipulate PATH.
-                // TODO: Print warning if this fails.
-                command.env(
-                    "PATH",
-                    util::prepend_to_path(bindir, env::var_os("PATH")).unwrap(),
-                );
-            }
-            None => {
-                command = Command::new(program);
-            }
-        }
+        let mut command = Command::new(program);
+        command.env(
+            "PATH",
+            util::prepend_to_path(&self.bindir, env::var_os("PATH")).unwrap(),
+        );
         command
     }
 }
 
-pub fn determine_best_runtime_for_version<RUNTIMES>(
-    version: &version::PartialVersion,
-    runtimes: RUNTIMES,
-) -> Option<Runtime>
-where
-    RUNTIMES: IntoIterator<Item = Runtime>,
-{
-    runtimes
-        .into_iter()
-        .filter_map(|runtime| runtime.version().map(|rtv| (rtv, runtime)).ok())
-        .filter(|(rtv, _)| version.compatible(*rtv))
-        .max_by(|(v1, _), (v2, _)| v1.cmp(v2))
-        .map(|(_, runtime)| runtime)
+/// Get the version of PostgreSQL from `pg_ctl`.
+///
+/// The [PostgreSQL "Versioning Policy"][versioning] shows that version numbers
+/// are **not** SemVer compatible. The [`version`][`mod@crate::version`] module
+/// in this crate is used to parse the version string from `pg_ctl` and it does
+/// understand the nuances of PostgreSQL's versioning scheme.
+///
+/// [versioning]: https://www.postgresql.org/support/versioning/
+pub fn version<P: AsRef<Path>>(bindir: P) -> Result<version::Version, RuntimeError> {
+    // Execute pg_ctl and extract version.
+    let command = bindir.as_ref().join("pg_ctl");
+    let output = Command::new(command).arg("--version").output()?;
+    if output.status.success() {
+        let version_string = String::from_utf8_lossy(&output.stdout);
+        // The version parser can deal with leading garbage, i.e. it can parse
+        // "pg_ctl (PostgreSQL) 12.2" and get 12.2 out of it.
+        Ok(version_string.parse()?)
+    } else {
+        Err(RuntimeError::UnknownVersion(VersionError::Missing))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Runtime;
+    use super::{Runtime, RuntimeError};
 
     use std::env;
     use std::path::PathBuf;
+
+    type TestResult = Result<(), RuntimeError>;
 
     fn find_bindir() -> PathBuf {
         env::split_paths(&env::var_os("PATH").expect("PATH not set"))
@@ -234,37 +123,10 @@ mod tests {
     }
 
     #[test]
-    fn runtime_find() {
-        let path = env::var_os("PATH").expect("PATH not set");
-        let runtimes = Runtime::find(&path);
-        assert_ne!(0, runtimes.len());
-    }
-
-    #[test]
-    fn runtime_find_on_path() {
-        let runtimes = Runtime::find_on_path();
-        assert_ne!(0, runtimes.len());
-    }
-
-    #[test]
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn runtime_find_on_platform() {
-        let runtimes = Runtime::find_on_platform();
-        assert_ne!(0, runtimes.len());
-    }
-
-    #[test]
-    fn runtime_new() {
+    fn runtime_new() -> TestResult {
         let bindir = find_bindir();
-        let pg = Runtime::new(&bindir);
-        assert_eq!(Some(bindir), pg.bindir);
-    }
-
-    #[test]
-    fn runtime_default() {
-        let pg = Runtime::default();
-        assert_eq!(None, pg.bindir);
-        let pg: Runtime = Default::default(); // Via trait.
-        assert_eq!(None, pg.bindir);
+        let pg = Runtime::new(&bindir)?;
+        assert_eq!(bindir, pg.bindir);
+        Ok(())
     }
 }

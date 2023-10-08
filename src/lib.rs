@@ -1,3 +1,11 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::enum_glob_use)]
+#![allow(clippy::many_single_char_names)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+
 //!
 //! The essential functionality in this crate is in the `Cluster` struct and its
 //! implementation. This covers the logic you need to create, run, and destroy
@@ -5,10 +13,10 @@
 //! versions that are not supported upstream).
 //!
 //! ```rust
-//! # use postgresfixture::{cluster, runtime};
-//! for runtime in runtime::Runtime::find_on_path() {
+//! use postgresfixture::prelude::*;
+//! for runtime in strategy::default().runtimes() {
 //!   let data_dir = tempdir::TempDir::new("data")?;
-//!   let cluster = cluster::Cluster::new(&data_dir, runtime);
+//!   let cluster = Cluster::new(&data_dir, &runtime)?;
 //!   cluster.start()?;
 //!   assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
 //!   let mut conn = cluster.connect("template1")?;
@@ -17,7 +25,7 @@
 //!   assert_eq!(collations, vec![1234]);
 //!   cluster.stop()?;
 //! }
-//! # Ok::<(), cluster::ClusterError>(())
+//! # Ok::<(), ClusterError>(())
 //! ```
 //!
 //! You may want to use this with the functions in the [`coordinate`] module
@@ -27,6 +35,9 @@
 //! safely share a single on-demand cluster.
 //!
 
+#[macro_use]
+extern crate lazy_static;
+
 #[doc = include_str!("../README.md")]
 #[cfg(doctest)]
 pub struct README;
@@ -34,6 +45,7 @@ pub struct README;
 pub mod cluster;
 pub mod coordinate;
 pub mod lock;
+pub mod prelude;
 pub mod runtime;
 pub mod version;
 

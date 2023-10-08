@@ -2,6 +2,7 @@
     "cSpell.words": [
         "bindir",
         "canonicalize",
+        "clippy",
         "createdb",
         "ctype",
         "datadir",
@@ -10,6 +11,7 @@
         "dbname",
         "dealias",
         "doctest",
+        "dtolnay",
         "EAGAIN",
         "errno",
         "fcntl",
@@ -24,8 +26,11 @@
         "postgresfixture",
         "psql",
         "runtimes",
+        "rustfmt",
+        "rustup",
         "SIGINT",
         "synchronisation",
         "tempdir"
-    ]
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false
 }

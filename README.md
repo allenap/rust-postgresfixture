@@ -78,10 +78,10 @@ PostgreSQL clusters of any officially supported version (and a few older
 versions that are not supported upstream).
 
 ```rust
-# use postgresfixture::{cluster, runtime};
-for runtime in runtime::Runtime::find_on_path() {
+use postgresfixture::prelude::*;
+for runtime in strategy::default().runtimes() {
   let data_dir = tempdir::TempDir::new("data")?;
-  let cluster = cluster::Cluster::new(&data_dir, runtime);
+  let cluster = Cluster::new(&data_dir, &runtime)?;
   cluster.start()?;
   assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
   let mut conn = cluster.connect("template1")?;
@@ -90,7 +90,7 @@ for runtime in runtime::Runtime::find_on_path() {
   assert_eq!(collations, vec![1234]);
   cluster.stop()?;
 }
-# Ok::<(), cluster::ClusterError>(())
+# Ok::<(), ClusterError>(())
 ```
 
 You may want to use this with the functions in the `coordinate` module like

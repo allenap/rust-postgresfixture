@@ -10,7 +10,10 @@ use clap::Parser;
 use color_eyre::eyre::{bail, Result, WrapErr};
 use color_eyre::{Help, SectionExt};
 
-use postgresfixture::{cluster, coordinate, lock, runtime};
+use postgresfixture::{
+    cluster, coordinate, lock,
+    runtime::{self, strategy::RuntimeStrategy},
+};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -55,9 +58,10 @@ fn main() -> Result<()> {
         ),
         cli::Commands::Runtimes { platform } => {
             let runtimes_found = {
-                let mut runtimes = runtime::Runtime::find_on_path();
+                let mut runtimes: Vec<_> =
+                    runtime::strategy::RuntimesOnPath::Env.runtimes().collect();
                 if platform {
-                    runtimes.extend(runtime::Runtime::find_on_platform())
+                    runtimes.extend(runtime::strategy::RuntimesOnPlatform.runtimes());
                 }
                 runtimes
             };
@@ -66,23 +70,18 @@ fn main() -> Result<()> {
             let mut runtimes: Vec<_> = runtimes_found
                 .into_iter()
                 .zip(iter::once(true).chain(iter::repeat(false)))
-                .filter_map(|(runtime, default)| match runtime.version() {
-                    Ok(version) => Some((version, runtime, default)),
-                    Err(_) => None,
-                })
                 .collect();
 
             // Sort by version. Higher versions will sort last.
-            runtimes.sort_by(|(v1, ..), (v2, ..)| v1.cmp(v2));
+            runtimes.sort_by(|(ra, ..), (rb, ..)| ra.version.cmp(&rb.version));
 
-            for (version, runtime, default) in runtimes {
+            for (runtime, default) in runtimes {
                 let default = if default { "=>" } else { "" };
-                match runtime.bindir {
-                    Some(ref path) => {
-                        println!("{default:2} {version:10} {path}", path = path.display())
-                    }
-                    None => println!("{default:2} {version:10?} <???>",),
-                }
+                println!(
+                    "{default:2} {version:10} {bindir}",
+                    bindir = runtime.bindir.display(),
+                    version = runtime.version,
+                )
             }
 
             Ok(0)
@@ -137,7 +136,9 @@ where
         .wrap_err("Could not create UUID-based lock file")
         .with_section(|| lock_uuid.to_string().header("UUID for lock file:"))?;
 
-    let cluster = cluster::Cluster::at(database_dir)?;
+    let strategy = runtime::strategy::default();
+    let cluster = cluster::Cluster::new(&database_dir, &strategy)?;
+
     let runner = if destroy {
         coordinate::run_and_destroy
     } else {

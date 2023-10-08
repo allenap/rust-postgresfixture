@@ -29,7 +29,7 @@ use super::VersionError;
 /// page][versioning] is what this models.
 ///
 /// [versioning]: https://www.postgresql.org/support/versioning/
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Version {
     /// Pre-PostgreSQL 10, with major, point, and minor version numbers, e.g.
     /// 9.6.17. It is an error to create this variant with a major number >= 10.
@@ -42,8 +42,8 @@ pub enum Version {
 impl fmt::Display for Version {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Version::Pre10(a, b, c) => fmt.pad(&format!("{}.{}.{}", a, b, c)),
-            Version::Post10(a, b) => fmt.pad(&format!("{}.{}", a, b)),
+            Version::Pre10(a, b, c) => fmt.pad(&format!("{a}.{b}.{c}")),
+            Version::Post10(a, b) => fmt.pad(&format!("{a}.{b}")),
         }
     }
 }
@@ -52,8 +52,11 @@ impl FromStr for Version {
     type Err = VersionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"(?x) \b (\d+) [.] (\d+) (?: [.] (\d+) )? \b").unwrap();
-        match re.captures(s) {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"(?x) \b (\d+) [.] (\d+) (?: [.] (\d+) )? \b")
+                .expect("invalid regex (for matching PostgreSQL versions)");
+        }
+        match RE.captures(s) {
             Some(caps) => {
                 let a = caps[1].parse::<u32>()?;
                 let b = caps[2].parse::<u32>()?;
