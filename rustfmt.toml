@@ -1,0 +1,7 @@
+# See https://github.com/rust-lang/rustfmt/blob/master/Configurations.md
+match_arm_leading_pipes = "Preserve"
+use_field_init_shorthand = true
+
+# TODO: Switch to `use_small_heuristics`.
+struct_lit_width = 60
+struct_variant_width = 60

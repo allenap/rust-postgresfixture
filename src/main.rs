@@ -19,11 +19,7 @@ fn main() -> Result<()> {
 
     let cli = cli::Cli::parse();
     let result = match cli.command {
-        cli::Commands::Shell {
-            cluster,
-            database,
-            lifecycle,
-        } => run(
+        cli::Commands::Shell { cluster, database, lifecycle } => run(
             cluster.dir,
             &database.name,
             lifecycle.destroy,
@@ -36,13 +32,7 @@ fn main() -> Result<()> {
                 )
             },
         ),
-        cli::Commands::Exec {
-            cluster,
-            database,
-            command,
-            args,
-            lifecycle,
-        } => run(
+        cli::Commands::Exec { cluster, database, command, args, lifecycle } => run(
             cluster.dir,
             &database.name,
             lifecycle.destroy,
