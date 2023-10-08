@@ -50,15 +50,10 @@ pub enum Commands {
 
     /// List discovered PostgreSQL runtimes.
     ///
-    /// The runtime shown on the line beginning with `=>` is the default.
+    /// The runtime shown on the line beginning with `=>` is the default, i.e.
+    /// the runtime that will be used when creating a new cluster.
     #[clap(display_order = 3)]
-    Runtimes {
-        /// Find runtimes using platform-specific logic too.
-        ///
-        /// Without this option, only `PATH` is searched.
-        #[clap(long = "platform", default_value_t = false)]
-        platform: bool,
-    },
+    Runtimes,
 }
 
 #[derive(Args)]

@@ -5,7 +5,7 @@ use crate::version;
 #[derive(Debug)]
 pub enum RuntimeError {
     IoError(io::Error),
-    UnknownVersion(version::VersionError),
+    VersionError(version::VersionError),
 }
 
 impl fmt::Display for RuntimeError {
@@ -13,7 +13,7 @@ impl fmt::Display for RuntimeError {
         use RuntimeError::*;
         match *self {
             IoError(ref e) => write!(fmt, "input/output error: {e}"),
-            UnknownVersion(ref e) => write!(fmt, "PostgreSQL version not known: {e}"),
+            VersionError(ref e) => e.fmt(fmt),
         }
     }
 }
@@ -22,7 +22,7 @@ impl error::Error for RuntimeError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             RuntimeError::IoError(ref error) => Some(error),
-            RuntimeError::UnknownVersion(ref error) => Some(error),
+            RuntimeError::VersionError(ref error) => Some(error),
         }
     }
 }
@@ -35,6 +35,6 @@ impl From<io::Error> for RuntimeError {
 
 impl From<version::VersionError> for RuntimeError {
     fn from(error: version::VersionError) -> RuntimeError {
-        RuntimeError::UnknownVersion(error)
+        RuntimeError::VersionError(error)
     }
 }

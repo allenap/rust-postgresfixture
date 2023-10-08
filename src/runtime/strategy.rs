@@ -18,7 +18,7 @@ pub type Runtimes<'a> = Box<dyn Iterator<Item = Runtime> + 'a>;
 ///
 /// This trait models those questions, and provides default implementations for
 /// #2 and #3.
-pub trait RuntimeStrategy {
+pub trait RuntimeStrategy: std::panic::RefUnwindSafe + 'static {
     /// Find all runtimes that this strategy knows about.
     fn runtimes(&self) -> Runtimes;
 

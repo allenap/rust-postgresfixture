@@ -85,7 +85,7 @@ versions that are not supported upstream).
 use postgresfixture::prelude::*;
 for runtime in strategy::default().runtimes() {
   let data_dir = tempdir::TempDir::new("data")?;
-  let cluster = Cluster::new(&data_dir, &runtime)?;
+  let cluster = Cluster::new(&data_dir, runtime)?;
   cluster.start()?;
   assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
   let mut conn = cluster.connect("template1")?;
