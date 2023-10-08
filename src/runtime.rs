@@ -3,8 +3,8 @@
 //! You may have many versions of PostgreSQL installed on a system. For example,
 //! on an Ubuntu system, they may be in `/usr/lib/postgresql/*`. On macOS using
 //! Homebrew, you may find them in `/usr/local/Cellar/postgresql@*`. [`Runtime`]
-//! can traverse your `PATH` to discover all the versions currently available to
-//! you.
+//! represents one such runtime; the [`Strategy`] trait represents how to find
+//! and select a runtime.
 
 mod cache;
 mod error;
@@ -18,6 +18,7 @@ use std::process::Command;
 use crate::util;
 use crate::version;
 pub use error::RuntimeError;
+pub use strategy::Strategy;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Runtime {
@@ -39,10 +40,10 @@ impl Runtime {
     /// PostgreSQL runtime.
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::{self, Runtime, strategy::{RuntimeStrategy}};
+    /// # use postgresfixture::runtime::{self, RuntimeError, Strategy};
     /// # let runtime = runtime::strategy::default().fallback().unwrap();
     /// let version = runtime.execute("pg_ctl").arg("--version").output()?;
-    /// # Ok::<(), runtime::RuntimeError>(())
+    /// # Ok::<(), RuntimeError>(())
     /// ```
     ///
     /// # Panics
@@ -64,10 +65,10 @@ impl Runtime {
     /// [`Self::bindir`].
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::{self, strategy::RuntimeStrategy};
+    /// # use postgresfixture::runtime::{self, RuntimeError, Strategy};
     /// # let runtime = runtime::strategy::default().fallback().unwrap();
     /// let version = runtime.command("bash").arg("-c").arg("echo hello").output();
-    /// # Ok::<(), runtime::RuntimeError>(())
+    /// # Ok::<(), RuntimeError>(())
     /// ```
     ///
     /// # Panics

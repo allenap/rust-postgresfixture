@@ -1,5 +1,5 @@
 use super::{exists, version, Cluster, ClusterError};
-use crate::runtime::{self, strategy::RuntimeStrategy, Runtime};
+use crate::runtime::{self, strategy::Strategy, Runtime};
 use crate::version::{PartialVersion, Version};
 
 use std::collections::HashSet;

@@ -11,7 +11,7 @@ use color_eyre::{Help, SectionExt};
 
 use postgresfixture::{
     cluster, coordinate, lock,
-    runtime::{self, strategy::RuntimeStrategy},
+    runtime::{self, strategy::Strategy},
 };
 
 fn main() -> Result<()> {

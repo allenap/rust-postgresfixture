@@ -31,12 +31,12 @@ pub struct Cluster {
     /// Corresponds to the `PGDATA` environment variable.
     datadir: PathBuf,
     /// How to select the PostgreSQL installation to use with this cluster.
-    strategy: Box<dyn runtime::strategy::RuntimeStrategy>,
+    strategy: Box<dyn runtime::Strategy>,
 }
 
 impl Cluster {
     /// Represent a cluster at the given path.
-    pub fn new<P: AsRef<Path>, S: runtime::strategy::RuntimeStrategy>(
+    pub fn new<P: AsRef<Path>, S: runtime::Strategy>(
         datadir: P,
         strategy: S,
     ) -> Result<Self, ClusterError> {
@@ -70,7 +70,7 @@ impl Cluster {
     /// Check if this cluster is running.
     ///
     /// Tries to distinguish carefully between "definitely running", "definitely
-    /// not running", and "don't know". The latter results in `ClusterError`.
+    /// not running", and "don't know". The latter results in [`ClusterError`].
     pub fn running(&self) -> Result<bool, ClusterError> {
         let output = self.ctl()?.arg("status").output()?;
         let code = match output.status.code() {
