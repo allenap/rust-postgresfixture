@@ -483,10 +483,7 @@ pub fn version<P: AsRef<Path>>(
 #[cfg(test)]
 mod tests {
     use super::{exists, version, Cluster, ClusterError};
-    use crate::runtime::{
-        strategy::{RuntimeStrategy, RuntimeStrategySet},
-        Runtime,
-    };
+    use crate::runtime::{self, strategy::RuntimeStrategy, Runtime};
     use crate::version::{PartialVersion, Version};
 
     use std::collections::HashSet;
@@ -497,8 +494,7 @@ mod tests {
     type TestResult = Result<(), ClusterError>;
 
     fn runtimes() -> Box<dyn Iterator<Item = Runtime>> {
-        let strategy: RuntimeStrategySet = Default::default();
-        let runtimes = strategy.runtimes().collect::<Vec<_>>();
+        let runtimes = runtime::strategy::default().runtimes().collect::<Vec<_>>();
         Box::new(runtimes.into_iter())
     }
 

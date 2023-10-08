@@ -10,7 +10,10 @@ use clap::Parser;
 use color_eyre::eyre::{bail, Result, WrapErr};
 use color_eyre::{Help, SectionExt};
 
-use postgresfixture::{cluster, coordinate, lock, runtime, runtime::strategy::RuntimeStrategy};
+use postgresfixture::{
+    cluster, coordinate, lock,
+    runtime::{self, strategy::RuntimeStrategy},
+};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -133,7 +136,7 @@ where
         .wrap_err("Could not create UUID-based lock file")
         .with_section(|| lock_uuid.to_string().header("UUID for lock file:"))?;
 
-    let strategy = runtime::strategy::RuntimeStrategySet::default();
+    let strategy = runtime::strategy::default();
     let cluster = cluster::Cluster::new(&database_dir, strategy)?;
 
     let runner = if destroy {

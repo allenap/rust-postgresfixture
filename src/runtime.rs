@@ -75,8 +75,8 @@ impl Runtime {
     /// PostgreSQL runtime.
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::{Runtime, strategy::{RuntimeStrategy, RuntimeStrategySet}};
-    /// # let runtime = RuntimeStrategySet::default().fallback().unwrap();
+    /// # use postgresfixture::runtime::{self, Runtime, strategy::{RuntimeStrategy}};
+    /// # let runtime = runtime::strategy::default().fallback().unwrap();
     /// let version = runtime.execute("pg_ctl").arg("--version").output().unwrap();
     /// ```
     pub fn execute<T: AsRef<OsStr>>(&self, program: T) -> Command {
@@ -96,8 +96,8 @@ impl Runtime {
     /// [`Self::bindir`].
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::strategy::{RuntimeStrategy, RuntimeStrategySet};
-    /// let runtime = RuntimeStrategySet::default().fallback().unwrap();
+    /// # use postgresfixture::runtime::{self, strategy::RuntimeStrategy};
+    /// let runtime = runtime::strategy::default().fallback().unwrap();
     /// let version = runtime.command("bash").arg("-c").arg("echo hello").output().unwrap();
     /// ```
     pub fn command<T: AsRef<OsStr>>(&self, program: T) -> Command {
@@ -114,10 +114,12 @@ impl Runtime {
 
 /// Get the version of PostgreSQL from `pg_ctl`.
 ///
-/// <https://www.postgresql.org/support/versioning/> shows that version
-/// numbers are **not** SemVer compatible. The [`version`][`crate::version`]
-/// module in this crate can parse the version string returned by this
-/// function.
+/// The [PostgreSQL "Versioning Policy"][versioning] shows that version numbers
+/// are **not** SemVer compatible. The [`version`][`mod@crate::version`] module
+/// in this crate is used to parse the version string from `pg_ctl` and it does
+/// understand the nuances of PostgreSQL's versioning scheme.
+///
+/// [versioning]: https://www.postgresql.org/support/versioning/
 pub fn version<P: AsRef<Path>>(bindir: P) -> Result<version::Version, RuntimeError> {
     // Execute pg_ctl and extract version.
     let command = bindir.as_ref().join("pg_ctl");

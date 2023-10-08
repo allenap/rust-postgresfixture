@@ -8,12 +8,26 @@ use super::Runtime;
 
 pub type Runtimes<'a> = Box<dyn Iterator<Item = Runtime> + 'a>;
 
+/// A strategy for finding PostgreSQL runtimes.
+///
+/// There are a few questions we want to answer:
+///
+/// 1. What runtimes are available?
+/// 2. Which of those runtimes is best suited to running a given cluster?
+/// 3. When there are no version constraints, what runtime should we use?
+///
+/// This trait models those questions, and provides default implementations for
+/// #2 and #3.
 pub trait RuntimeStrategy {
     /// Find all runtimes that this strategy knows about.
     fn runtimes(&self) -> Runtimes;
 
-    /// Select the most appropriate runtime known to this strategy for the given
-    /// version constraint.
+    /// Determine the most appropriate runtime known to this strategy for the
+    /// given version constraint.
+    ///
+    /// The default implementation narrows the list of runtimes to those that
+    /// match the given version constraint, then chooses the one with the
+    /// highest version number. It might return [`None`].
     fn select(&self, version: &version::PartialVersion) -> Option<Runtime> {
         self.runtimes()
             .filter(|runtime| version.compatible(runtime.version))
@@ -22,12 +36,15 @@ pub trait RuntimeStrategy {
 
     /// The runtime to use when there are no version constraints, e.g. when
     /// creating a new cluster.
+    ///
+    /// The default implementation selects the runtime with the highest version
+    /// number.
     fn fallback(&self) -> Option<Runtime> {
         self.runtimes().max_by(|ra, rb| ra.version.cmp(&rb.version))
     }
 }
 
-/// Find runtimes on the given path, or on `PATH` (from the environment).
+/// Find runtimes on a given path, or on `PATH` (from the environment).
 ///
 /// Parses input according to platform conventions for the `PATH` environment
 /// variable. See [`env::split_paths`] for details.
@@ -68,6 +85,14 @@ impl RuntimeStrategy for RuntimesOnPath {
     }
 }
 
+/// Find runtimes using platform-specific knowledge.
+///
+/// For example:
+/// - on Debian and Ubuntu, check subdirectories of `/usr/lib/postgresql`.
+/// - on macOS, check Homebrew.
+///
+/// More platform-specific knowledge may be added to this strategy in the
+/// future.
 #[derive(Clone, Debug)]
 pub struct RuntimesOnPlatform;
 
@@ -137,13 +162,21 @@ impl RuntimeStrategy for RuntimesOnPlatform {
     }
 }
 
+/// Combine multiple runtime strategies, in order of preference.
 pub struct RuntimeStrategySet(Vec<Box<dyn RuntimeStrategy>>);
 
 impl RuntimeStrategy for RuntimeStrategySet {
+    /// Runtimes known to all strategies, in the same order as each strategy
+    /// returns them.
+    ///
+    /// Note that runtimes may be duplicated, and runtimes with the same version
+    /// number may be returned.
     fn runtimes(&self) -> Runtimes {
         Box::new(self.0.iter().flat_map(|strategy| strategy.runtimes()))
     }
 
+    /// Asks each strategy in turn to select a runtime. The first non-[`None`]
+    /// answer is selected.
     fn select(&self, version: &version::PartialVersion) -> Option<Runtime> {
         self.0
             .iter()
@@ -151,6 +184,8 @@ impl RuntimeStrategy for RuntimeStrategySet {
             .next()
     }
 
+    /// Asks each strategy in turn for a fallback runtime. The first
+    /// non-[`None`] answer is selected.
     fn fallback(&self) -> Option<Runtime> {
         self.0
             .iter()
@@ -159,6 +194,7 @@ impl RuntimeStrategy for RuntimeStrategySet {
     }
 }
 
+/// Select runtimes from on `PATH` followed by platform-specific runtimes.
 impl Default for RuntimeStrategySet {
     fn default() -> Self {
         Self(vec![
@@ -168,11 +204,14 @@ impl Default for RuntimeStrategySet {
     }
 }
 
+/// Use a single runtime as a strategy.
 impl RuntimeStrategy for Runtime {
+    /// This runtime itself is the only runtime known to this strategy.
     fn runtimes(&self) -> Runtimes {
         Box::new(std::iter::once(self.clone()))
     }
 
+    /// Return this runtime if the given version constraint is compatible.
     fn select(&self, version: &version::PartialVersion) -> Option<Runtime> {
         if version.compatible(self.version) {
             Some(self.clone())
@@ -181,9 +220,17 @@ impl RuntimeStrategy for Runtime {
         }
     }
 
+    /// Always return this runtime.
     fn fallback(&self) -> Option<Runtime> {
         Some(self.clone())
     }
+}
+
+/// The default runtime strategy.
+///
+/// At present this returns the default [`RuntimeStrategySet`].
+pub fn default() -> impl RuntimeStrategy {
+    RuntimeStrategySet::default()
 }
 
 #[cfg(test)]

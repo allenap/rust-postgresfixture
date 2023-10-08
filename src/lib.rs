@@ -6,8 +6,8 @@
 //!
 //! ```rust
 //! # use postgresfixture::{cluster, runtime};
-//! # use postgresfixture::runtime::{strategy::{RuntimeStrategy, RuntimeStrategySet}};
-//! for runtime in runtime::strategy::RuntimeStrategySet::default().runtimes() {
+//! # use postgresfixture::runtime::{strategy::RuntimeStrategy};
+//! for runtime in runtime::strategy::default().runtimes() {
 //!   let data_dir = tempdir::TempDir::new("data")?;
 //!   let cluster = cluster::Cluster::new(&data_dir, runtime)?;
 //!   cluster.start()?;
