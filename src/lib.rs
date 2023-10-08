@@ -5,11 +5,10 @@
 //! versions that are not supported upstream).
 //!
 //! ```rust
-//! # use postgresfixture::{cluster, runtime};
-//! # use postgresfixture::runtime::{strategy::RuntimeStrategy};
-//! for runtime in runtime::strategy::default().runtimes() {
+//! use postgresfixture::prelude::*;
+//! for runtime in strategy::default().runtimes() {
 //!   let data_dir = tempdir::TempDir::new("data")?;
-//!   let cluster = cluster::Cluster::new(&data_dir, runtime)?;
+//!   let cluster = Cluster::new(&data_dir, runtime)?;
 //!   cluster.start()?;
 //!   assert_eq!(cluster.databases()?, vec!["postgres", "template0", "template1"]);
 //!   let mut conn = cluster.connect("template1")?;
@@ -18,7 +17,7 @@
 //!   assert_eq!(collations, vec![1234]);
 //!   cluster.stop()?;
 //! }
-//! # Ok::<(), cluster::ClusterError>(())
+//! # Ok::<(), ClusterError>(())
 //! ```
 //!
 //! You may want to use this with the functions in the [`coordinate`] module
@@ -35,6 +34,7 @@ pub struct README;
 pub mod cluster;
 pub mod coordinate;
 pub mod lock;
+pub mod prelude;
 pub mod runtime;
 pub mod version;
 

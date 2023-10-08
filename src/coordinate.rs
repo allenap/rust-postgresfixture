@@ -5,15 +5,15 @@
 //! safely start and use the cluster, then stop it when it's no longer needed:
 //!
 //! ```rust
-//! # use postgresfixture::{cluster, coordinate, lock, runtime};
-//! # use postgresfixture::runtime::strategy::RuntimeStrategy;
-//! let cluster_dir = tempdir::TempDir::new("cluster").unwrap();
+//! use postgresfixture::prelude::*;
+//! let cluster_dir = tempdir::TempDir::new("cluster")?;
 //! let data_dir = cluster_dir.path().join("data");
-//! let runtime = runtime::strategy::default().fallback().unwrap();
-//! let cluster = cluster::Cluster::new(&data_dir, runtime).unwrap();
+//! let runtime = strategy::default();
+//! let cluster = Cluster::new(&data_dir, runtime)?;
 //! let lock_file = cluster_dir.path().join("lock");
-//! let lock = lock::UnlockedFile::try_from(lock_file.as_path()).unwrap();
-//! assert!(coordinate::run_and_stop(&cluster, lock, cluster::exists).unwrap())
+//! let lock = lock::UnlockedFile::try_from(lock_file.as_path())?;
+//! assert!(coordinate::run_and_stop(&cluster, lock, cluster::exists)?);
+//! # Ok::<(), ClusterError>(())
 //! ```
 
 use std::time::Duration;
