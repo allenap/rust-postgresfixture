@@ -11,7 +11,7 @@ use color_eyre::{Help, SectionExt};
 
 use postgresfixture::{
     cluster, coordinate, lock,
-    runtime::{self, strategy::RuntimeStrategy},
+    runtime::{self, strategy::Strategy},
 };
 
 fn main() -> Result<()> {
@@ -92,7 +92,7 @@ fn run<INIT, ACTION>(
     action: ACTION,
 ) -> Result<i32>
 where
-    INIT: std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::ClusterError>,
+    INIT: std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::Error>,
     ACTION: FnOnce(&cluster::Cluster) -> Result<i32> + std::panic::UnwindSafe,
 {
     // Create the cluster directory first.
@@ -154,7 +154,7 @@ where
 /// settings, e.g. `fsync`, `full_page_writes`, etc. that need to be set early.
 fn initialise(
     mode: Option<cli::Mode>,
-) -> impl std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::ClusterError> {
+) -> impl std::panic::UnwindSafe + FnOnce(&cluster::Cluster) -> Result<(), cluster::Error> {
     match mode {
         Some(cli::Mode::Fast) => {
             |cluster: &cluster::Cluster| {

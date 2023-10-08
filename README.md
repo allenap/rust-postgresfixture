@@ -90,7 +90,7 @@ for runtime in strategy::default().runtimes() {
   assert_eq!(collations, vec![1234]);
   cluster.stop()?;
 }
-# Ok::<(), ClusterError>(())
+# Ok::<(), cluster::Error>(())
 ```
 
 You may want to use this with the functions in the `coordinate` module like

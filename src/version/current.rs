@@ -20,7 +20,7 @@ use std::str::FromStr;
 
 use regex::Regex;
 
-use super::VersionError;
+use super::Error;
 
 /// Represents a full PostgreSQL version. This is the kind of thing we see when
 /// running `pg_ctl --version` for example.
@@ -49,7 +49,7 @@ impl fmt::Display for Version {
 }
 
 impl FromStr for Version {
-    type Err = VersionError;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         lazy_static! {
@@ -64,21 +64,21 @@ impl FromStr for Version {
                     Some(m) => {
                         let c = m.as_str().parse::<u32>()?;
                         if a >= 10 {
-                            Err(VersionError::BadlyFormed)
+                            Err(Error::BadlyFormed)
                         } else {
                             Ok(Version::Pre10(a, b, c))
                         }
                     }
                     None => {
                         if a < 10 {
-                            Err(VersionError::BadlyFormed)
+                            Err(Error::BadlyFormed)
                         } else {
                             Ok(Version::Post10(a, b))
                         }
                     }
                 }
             }
-            None => Err(VersionError::Missing),
+            None => Err(Error::Missing),
         }
     }
 }
@@ -86,7 +86,7 @@ impl FromStr for Version {
 #[cfg(test)]
 mod tests {
     use super::Version::{Post10, Pre10};
-    use super::{Version, VersionError::*};
+    use super::{Error::*, Version};
 
     use std::cmp::Ordering;
 

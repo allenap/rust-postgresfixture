@@ -18,7 +18,9 @@ pub type Runtimes<'a> = Box<dyn Iterator<Item = Runtime> + 'a>;
 ///
 /// This trait models those questions, and provides default implementations for
 /// #2 and #3.
-pub trait RuntimeStrategy: std::panic::RefUnwindSafe + 'static {
+///
+/// A good place to start is [`default()`]. It might do what you need.
+pub trait Strategy: std::panic::RefUnwindSafe + 'static {
     /// Find all runtimes that this strategy knows about.
     fn runtimes(&self) -> Runtimes;
 
@@ -71,7 +73,7 @@ impl RuntimesOnPath {
     }
 }
 
-impl RuntimeStrategy for RuntimesOnPath {
+impl Strategy for RuntimesOnPath {
     fn runtimes(&self) -> Runtimes {
         Box::new(
             match self {
@@ -151,7 +153,7 @@ impl RuntimesOnPlatform {
     }
 }
 
-impl RuntimeStrategy for RuntimesOnPlatform {
+impl Strategy for RuntimesOnPlatform {
     fn runtimes(&self) -> Runtimes {
         Box::new(
             Self::find()
@@ -163,9 +165,10 @@ impl RuntimeStrategy for RuntimesOnPlatform {
 }
 
 /// Combine multiple runtime strategies, in order of preference.
-pub struct RuntimeStrategySet(Vec<Box<dyn RuntimeStrategy>>);
+#[allow(clippy::module_name_repetitions)]
+pub struct StrategySet(Vec<Box<dyn Strategy>>);
 
-impl RuntimeStrategy for RuntimeStrategySet {
+impl Strategy for StrategySet {
     /// Runtimes known to all strategies, in the same order as each strategy
     /// returns them.
     ///
@@ -196,7 +199,7 @@ impl RuntimeStrategy for RuntimeStrategySet {
 }
 
 /// Select runtimes from on `PATH` followed by platform-specific runtimes.
-impl Default for RuntimeStrategySet {
+impl Default for StrategySet {
     fn default() -> Self {
         Self(vec![
             Box::new(RuntimesOnPath::Env),
@@ -206,7 +209,7 @@ impl Default for RuntimeStrategySet {
 }
 
 /// Use a single runtime as a strategy.
-impl RuntimeStrategy for Runtime {
+impl Strategy for Runtime {
     /// This runtime itself is the only runtime known to this strategy.
     fn runtimes(&self) -> Runtimes {
         Box::new(std::iter::once(self.clone()))
@@ -229,16 +232,16 @@ impl RuntimeStrategy for Runtime {
 
 /// The default runtime strategy.
 ///
-/// At present this returns the default [`RuntimeStrategySet`].
-pub fn default() -> impl RuntimeStrategy {
-    RuntimeStrategySet::default()
+/// At present this returns the default [`StrategySet`].
+pub fn default() -> impl Strategy {
+    StrategySet::default()
 }
 
 #[cfg(test)]
 mod tests {
     use std::env;
 
-    use super::{RuntimeStrategy, RuntimeStrategySet, RuntimesOnPath, RuntimesOnPlatform};
+    use super::{RuntimesOnPath, RuntimesOnPlatform, Strategy, StrategySet};
 
     /// This will fail if there are no PostgreSQL runtimes installed.
     #[test]
@@ -266,10 +269,10 @@ mod tests {
 
     /// This will fail if there are no PostgreSQL runtimes installed. It's also
     /// somewhat fragile because it relies upon knowing the implementation of
-    /// the strategies of which the default [`RuntimeStrategySet`] is composed.
+    /// the strategies of which the default [`StrategySet`] is composed.
     #[test]
     fn runtime_strategy_set_default() {
-        let strategy = RuntimeStrategySet::default();
+        let strategy = StrategySet::default();
         // There is at least one runtime available.
         let runtimes = strategy.runtimes();
         assert_ne!(0, runtimes.count());

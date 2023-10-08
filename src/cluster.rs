@@ -16,7 +16,7 @@ use shell_quote::sh::escape_into;
 
 use crate::runtime;
 use crate::version;
-pub use error::ClusterError;
+pub use error::Error;
 
 /// Representation of a PostgreSQL cluster.
 ///
@@ -31,15 +31,15 @@ pub struct Cluster {
     /// Corresponds to the `PGDATA` environment variable.
     datadir: PathBuf,
     /// How to select the PostgreSQL installation to use with this cluster.
-    strategy: Box<dyn runtime::strategy::RuntimeStrategy>,
+    strategy: Box<dyn runtime::Strategy>,
 }
 
 impl Cluster {
     /// Represent a cluster at the given path.
-    pub fn new<P: AsRef<Path>, S: runtime::strategy::RuntimeStrategy>(
+    pub fn new<P: AsRef<Path>, S: runtime::Strategy>(
         datadir: P,
         strategy: S,
-    ) -> Result<Self, ClusterError> {
+    ) -> Result<Self, Error> {
         Ok(Self {
             datadir: datadir.as_ref().to_owned(),
             strategy: Box::new(strategy),
@@ -47,20 +47,20 @@ impl Cluster {
     }
 
     /// Determine the runtime to use with this cluster.
-    fn runtime(&self) -> Result<runtime::Runtime, ClusterError> {
+    fn runtime(&self) -> Result<runtime::Runtime, Error> {
         match version(self)? {
             None => self
                 .strategy
                 .fallback()
-                .ok_or_else(|| ClusterError::RuntimeDefaultNotFound),
+                .ok_or_else(|| Error::RuntimeDefaultNotFound),
             Some(version) => self
                 .strategy
                 .select(&version)
-                .ok_or_else(|| ClusterError::RuntimeNotFound(version)),
+                .ok_or_else(|| Error::RuntimeNotFound(version)),
         }
     }
 
-    fn ctl(&self) -> Result<Command, ClusterError> {
+    fn ctl(&self) -> Result<Command, Error> {
         let mut command = self.runtime()?.execute("pg_ctl");
         command.env("PGDATA", &self.datadir);
         command.env("PGHOST", &self.datadir);
@@ -70,12 +70,12 @@ impl Cluster {
     /// Check if this cluster is running.
     ///
     /// Tries to distinguish carefully between "definitely running", "definitely
-    /// not running", and "don't know". The latter results in `ClusterError`.
-    pub fn running(&self) -> Result<bool, ClusterError> {
+    /// not running", and "don't know". The latter results in `Error`.
+    pub fn running(&self) -> Result<bool, Error> {
         let output = self.ctl()?.arg("status").output()?;
         let code = match output.status.code() {
             // Killed by signal; return early.
-            None => return Err(ClusterError::Other(output)),
+            None => return Err(Error::Other(output)),
             // Success; return early (the server is running).
             Some(0) => return Ok(true),
             // More work required to decode what this means.
@@ -161,7 +161,7 @@ impl Cluster {
             Some(running) => Ok(running),
             // TODO: Perhaps include the exit code from `pg_ctl status` in the
             // error message, and whatever it printed out.
-            None => Err(ClusterError::UnsupportedVersion(runtime.version)),
+            None => Err(Error::UnsupportedVersion(runtime.version)),
         }
     }
 
@@ -180,15 +180,15 @@ impl Cluster {
     }
 
     /// Create the cluster if it does not already exist.
-    pub fn create(&self) -> Result<bool, ClusterError> {
+    pub fn create(&self) -> Result<bool, Error> {
         match self._create() {
-            Err(ClusterError::UnixError(Errno::EAGAIN)) if exists(self) => Ok(false),
-            Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
+            Err(Error::UnixError(Errno::EAGAIN)) if exists(self) => Ok(false),
+            Err(Error::UnixError(Errno::EAGAIN)) => Err(Error::InUse),
             other => other,
         }
     }
 
-    fn _create(&self) -> Result<bool, ClusterError> {
+    fn _create(&self) -> Result<bool, Error> {
         if exists(self) {
             // Nothing more to do; the cluster is already in place.
             Ok(false)
@@ -211,15 +211,15 @@ impl Cluster {
     }
 
     // Start the cluster if it's not already running.
-    pub fn start(&self) -> Result<bool, ClusterError> {
+    pub fn start(&self) -> Result<bool, Error> {
         match self._start() {
-            Err(ClusterError::UnixError(Errno::EAGAIN)) if self.running()? => Ok(false),
-            Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
+            Err(Error::UnixError(Errno::EAGAIN)) if self.running()? => Ok(false),
+            Err(Error::UnixError(Errno::EAGAIN)) => Err(Error::InUse),
             other => other,
         }
     }
 
-    fn _start(&self) -> Result<bool, ClusterError> {
+    fn _start(&self) -> Result<bool, Error> {
         // Ensure that the cluster has been created.
         self._create()?;
         // Check if we're running already.
@@ -253,7 +253,7 @@ impl Cluster {
     }
 
     // Connect to this cluster.
-    pub fn connect(&self, database: &str) -> Result<postgres::Client, ClusterError> {
+    pub fn connect(&self, database: &str) -> Result<postgres::Client, Error> {
         let user = &env::var("USER").unwrap_or_else(|_| "USER-not-set".to_string());
         let host = self.datadir.to_string_lossy(); // postgres crate API limitation.
         let client = postgres::Client::configure()
@@ -264,7 +264,7 @@ impl Cluster {
         Ok(client)
     }
 
-    pub fn shell(&self, database: &str) -> Result<ExitStatus, ClusterError> {
+    pub fn shell(&self, database: &str) -> Result<ExitStatus, Error> {
         let mut command = self.runtime()?.execute("psql");
         command.arg("--quiet");
         command.env("PGDATA", &self.datadir);
@@ -278,7 +278,7 @@ impl Cluster {
         database: &str,
         command: T,
         args: &[T],
-    ) -> Result<ExitStatus, ClusterError> {
+    ) -> Result<ExitStatus, Error> {
         let mut command = self.runtime()?.command(command);
         command.args(args);
         command.env("PGDATA", &self.datadir);
@@ -288,7 +288,7 @@ impl Cluster {
     }
 
     // The names of databases in this cluster.
-    pub fn databases(&self) -> Result<Vec<String>, ClusterError> {
+    pub fn databases(&self) -> Result<Vec<String>, Error> {
         let mut conn = self.connect("template1")?;
         let rows = conn.query(
             "SELECT datname FROM pg_catalog.pg_database ORDER BY datname",
@@ -299,7 +299,7 @@ impl Cluster {
     }
 
     /// Create the named database.
-    pub fn createdb(&self, database: &str) -> Result<bool, ClusterError> {
+    pub fn createdb(&self, database: &str) -> Result<bool, Error> {
         let statement = format!(
             "CREATE DATABASE {}",
             postgres_protocol::escape::escape_identifier(database)
@@ -310,7 +310,7 @@ impl Cluster {
     }
 
     /// Drop the named database.
-    pub fn dropdb(&self, database: &str) -> Result<bool, ClusterError> {
+    pub fn dropdb(&self, database: &str) -> Result<bool, Error> {
         let statement = format!(
             "DROP DATABASE {}",
             postgres_protocol::escape::escape_identifier(database)
@@ -321,15 +321,15 @@ impl Cluster {
     }
 
     // Stop the cluster if it's running.
-    pub fn stop(&self) -> Result<bool, ClusterError> {
+    pub fn stop(&self) -> Result<bool, Error> {
         match self._stop() {
-            Err(ClusterError::UnixError(Errno::EAGAIN)) if !self.running()? => Ok(false),
-            Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
+            Err(Error::UnixError(Errno::EAGAIN)) if !self.running()? => Ok(false),
+            Err(Error::UnixError(Errno::EAGAIN)) => Err(Error::InUse),
             other => other,
         }
     }
 
-    fn _stop(&self) -> Result<bool, ClusterError> {
+    fn _stop(&self) -> Result<bool, Error> {
         // If the cluster's not already running, don't do anything.
         if !self.running()? {
             return Ok(false);
@@ -348,14 +348,14 @@ impl Cluster {
     }
 
     // Destroy the cluster if it exists, after stopping it.
-    pub fn destroy(&self) -> Result<bool, ClusterError> {
+    pub fn destroy(&self) -> Result<bool, Error> {
         match self._destroy() {
-            Err(ClusterError::UnixError(Errno::EAGAIN)) => Err(ClusterError::InUse),
+            Err(Error::UnixError(Errno::EAGAIN)) => Err(Error::InUse),
             other => other,
         }
     }
 
-    fn _destroy(&self) -> Result<bool, ClusterError> {
+    fn _destroy(&self) -> Result<bool, Error> {
         if self._stop()? || self.datadir.is_dir() {
             fs::remove_dir_all(&self.datadir)?;
             Ok(true)
@@ -389,9 +389,7 @@ pub fn exists<P: AsRef<Path>>(datadir: P) -> bool {
 /// versions before 10 this is typically (maybe always) the major and point
 /// version, e.g. 9.4 rather than 9.4.26. For version 10 and above it appears to
 /// be just the major number, e.g. 14 rather than 14.2.
-pub fn version<P: AsRef<Path>>(
-    datadir: P,
-) -> Result<Option<version::PartialVersion>, ClusterError> {
+pub fn version<P: AsRef<Path>>(datadir: P) -> Result<Option<version::PartialVersion>, Error> {
     let version_file = datadir.as_ref().join("PG_VERSION");
     match std::fs::read_to_string(version_file) {
         Ok(version) => Ok(Some(version.parse()?)),

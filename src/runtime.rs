@@ -3,8 +3,8 @@
 //! You may have many versions of PostgreSQL installed on a system. For example,
 //! on an Ubuntu system, they may be in `/usr/lib/postgresql/*`. On macOS using
 //! Homebrew, you may find them in `/usr/local/Cellar/postgresql@*`. [`Runtime`]
-//! can traverse your `PATH` to discover all the versions currently available to
-//! you.
+//! represents one such runtime; the [`Strategy`] trait represents how to find
+//! and select a runtime.
 
 mod cache;
 mod error;
@@ -17,7 +17,8 @@ use std::process::Command;
 
 use crate::util;
 use crate::version;
-pub use error::RuntimeError;
+pub use error::Error;
+pub use strategy::Strategy;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Runtime {
@@ -30,7 +31,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn new<P: AsRef<Path>>(bindir: P) -> Result<Self, RuntimeError> {
+    pub fn new<P: AsRef<Path>>(bindir: P) -> Result<Self, Error> {
         let version = cache::version(bindir.as_ref().join("pg_ctl"))?;
         Ok(Self { bindir: bindir.as_ref().to_owned(), version })
     }
@@ -39,10 +40,10 @@ impl Runtime {
     /// PostgreSQL runtime.
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::{self, Runtime, strategy::{RuntimeStrategy}};
+    /// # use postgresfixture::runtime::{self, Runtime, Strategy};
     /// # let runtime = runtime::strategy::default().fallback().unwrap();
     /// let version = runtime.execute("pg_ctl").arg("--version").output()?;
-    /// # Ok::<(), runtime::RuntimeError>(())
+    /// # Ok::<(), runtime::Error>(())
     /// ```
     ///
     /// # Panics
@@ -64,10 +65,10 @@ impl Runtime {
     /// [`Self::bindir`].
     ///
     /// ```rust
-    /// # use postgresfixture::runtime::{self, strategy::RuntimeStrategy};
+    /// # use postgresfixture::runtime::{self, Strategy};
     /// # let runtime = runtime::strategy::default().fallback().unwrap();
     /// let version = runtime.command("bash").arg("-c").arg("echo hello").output();
-    /// # Ok::<(), runtime::RuntimeError>(())
+    /// # Ok::<(), runtime::Error>(())
     /// ```
     ///
     /// # Panics
@@ -86,12 +87,12 @@ impl Runtime {
 
 #[cfg(test)]
 mod tests {
-    use super::{Runtime, RuntimeError};
+    use super::{Error, Runtime};
 
     use std::env;
     use std::path::PathBuf;
 
-    type TestResult = Result<(), RuntimeError>;
+    type TestResult = Result<(), Error>;
 
     fn find_bindir() -> PathBuf {
         env::split_paths(&env::var_os("PATH").expect("PATH not set"))

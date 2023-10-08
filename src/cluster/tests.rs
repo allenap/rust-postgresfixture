@@ -1,5 +1,5 @@
-use super::{exists, version, Cluster, ClusterError};
-use crate::runtime::{self, strategy::RuntimeStrategy, Runtime};
+use super::{exists, version, Cluster, Error};
+use crate::runtime::{self, strategy::Strategy, Runtime};
 use crate::version::{PartialVersion, Version};
 
 use std::collections::HashSet;
@@ -7,7 +7,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-type TestResult = Result<(), ClusterError>;
+type TestResult = Result<(), Error>;
 
 fn runtimes() -> Box<dyn Iterator<Item = Runtime>> {
     let runtimes = runtime::strategy::default().runtimes().collect::<Vec<_>>();

@@ -3,7 +3,6 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::match_same_arms)]
 #![allow(clippy::missing_errors_doc)]
-#![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
 //!
@@ -25,7 +24,7 @@
 //!   assert_eq!(collations, vec![1234]);
 //!   cluster.stop()?;
 //! }
-//! # Ok::<(), ClusterError>(())
+//! # Ok::<(), cluster::Error>(())
 //! ```
 //!
 //! You may want to use this with the functions in the [`coordinate`] module

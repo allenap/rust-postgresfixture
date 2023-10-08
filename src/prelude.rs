@@ -1,11 +1,8 @@
 //! Basic prelude for `postgresfixture`.
 
 pub use crate::{
-    cluster::{self, Cluster, ClusterError},
+    cluster::{self, Cluster},
     coordinate, lock,
-    runtime::{
-        strategy::{self, RuntimeStrategy},
-        Runtime, RuntimeError,
-    },
-    version::{PartialVersion, Version, VersionError},
+    runtime::{self, strategy::Strategy, Runtime},
+    version::{self, Version},
 };
