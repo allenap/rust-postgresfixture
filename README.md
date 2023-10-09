@@ -1,3 +1,7 @@
+**⚠️ Development has moved to [pgdo](https://github.com/allenap/pgdo).**
+
+---
+
 # rust-postgresfixture
 
 A [Rust](https://www.rust-lang.org/) library and command-line tool for creating
